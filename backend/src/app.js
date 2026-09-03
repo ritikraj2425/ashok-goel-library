@@ -19,7 +19,12 @@ const adminUserRoutes = require('./routes/admin.user.routes');
 const adminStudentRoutes = require('./routes/admin.student.routes');
 const adminAnalyticsRoutes = require('./routes/admin.analytics.routes');
 
+const connectDB = require('./config/db');
+
 const app = express();
+
+// Initialize DB connection for serverless environments (Vercel)
+connectDB();
 
 // --- Security middleware ---
 app.use(helmet());
