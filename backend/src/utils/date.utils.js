@@ -73,28 +73,71 @@ const MON_SAT_SLOTS = generateMonSatSlots();
 const SUN_SLOTS = generateSunSlots();
 
 /**
+ * Helper to get the current time components in IST
+ */
+function getISTParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+  
+  return {
+    year: get('year'),
+    month: get('month'), // 1-indexed
+    day: get('day'),
+    hour: get('hour') === 24 ? 0 : get('hour'),
+    minute: get('minute'),
+    second: get('second'),
+  };
+}
+
+/**
+ * Creates an absolute Date object for a specific hour and minute in IST today.
+ */
+function getAbsoluteTimeForIST(hour, minute) {
+  const now = new Date();
+  const istNow = getISTParts(now);
+  
+  // Create a Date treating the IST string as local time, but we must explicitly define the timezone
+  // The easiest way is to construct the ISO string for IST and parse it
+  const pad = (n) => n.toString().padStart(2, '0');
+  const isoString = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}T${pad(hour)}:${pad(minute)}:00.000+05:30`;
+  
+  return new Date(isoString);
+}
+
+/**
  * Get all available slots for today that are in the future
- * @returns {Array} List of available slots
+ * @returns {Object} List of available slots
  */
 function getFutureSlotsForToday() {
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 is Sunday
+  
+  // Need to get the day of the week in IST
+  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const dayOfWeek = dateInIST.getDay(); // 0 is Sunday
   
   const allSlots = dayOfWeek === 0 ? SUN_SLOTS : MON_SAT_SLOTS;
   
-  // Filter slots that have not yet started.
-  // We'll require the start time to be in the future (or within some tolerance)
-  // Let's say if it's 10:15, the 10:30 slot is available, but the 9:30 slot is not.
-  // If it's 10:35, the 10:30 slot is no longer available to book.
-  
   const futureSlots = allSlots.filter(slot => {
-    const slotEndTime = new Date();
-    slotEndTime.setHours(slot.endHour, slot.endMin, 0, 0);
+    // Get absolute time of the slot's end in IST
+    const slotEndTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin);
     return slotEndTime > now;
   });
   
+  const istNow = getISTParts(now);
+  const pad = (n) => n.toString().padStart(2, '0');
+  
   return {
-    date: now.toISOString().split('T')[0], // YYYY-MM-DD
+    date: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`, // YYYY-MM-DD in IST
     slots: futureSlots
   };
 }
@@ -104,23 +147,25 @@ function getFutureSlotsForToday() {
  */
 function getSlotDetails(slotId) {
   const now = new Date();
-  const dayOfWeek = now.getDay();
-  const allSlots = dayOfWeek === 0 ? SUN_SLOTS : MON_SAT_SLOTS;
+  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const dayOfWeek = dateInIST.getDay();
+  
+  const allSlots = (dayOfWeek === 0) ? SUN_SLOTS : MON_SAT_SLOTS;
   
   const slot = allSlots.find(s => s.id === slotId);
   if (!slot) return null;
   
-  const startTime = new Date();
-  startTime.setHours(slot.startHour, slot.startMin, 0, 0);
+  const startTime = getAbsoluteTimeForIST(slot.startHour, slot.startMin);
+  const endTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin);
   
-  const endTime = new Date();
-  endTime.setHours(slot.endHour, slot.endMin, 0, 0);
+  const istNow = getISTParts(now);
+  const pad = (n) => n.toString().padStart(2, '0');
   
   return {
     ...slot,
     startTime,
     endTime,
-    dateString: now.toISOString().split('T')[0]
+    dateString: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`
   };
 }
 

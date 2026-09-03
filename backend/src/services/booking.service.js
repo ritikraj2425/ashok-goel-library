@@ -289,7 +289,7 @@ async function cancelApprovedByStudent(bookingId, userId) {
     throw createError(`Cannot cancel booking with status: ${existing.status}`);
   }
 
-  // Check for permanent block (4 or more approved cancellations in 7 days)
+  // Check for permanent block (3 or more approved cancellations in 7 days)
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const cancellationCount = await Booking.countDocuments({
     studentUserId: userId,
@@ -298,7 +298,7 @@ async function cancelApprovedByStudent(bookingId, userId) {
     cancelledAt: { $gte: sevenDaysAgo },
   });
 
-  if (cancellationCount >= 4) {
+  if (cancellationCount >= 3) {
     await User.findByIdAndUpdate(userId, {
       $set: {
         isBlocked: true,

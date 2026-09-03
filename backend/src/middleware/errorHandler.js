@@ -36,7 +36,11 @@ function errorHandler(err, req, res, _next) {
   }
 
   // Generic server error
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ 
+    error: 'Internal server error', 
+    message: err.message, 
+    stack: env.NODE_ENV === 'development' ? err.stack : undefined 
+  });
 }
 
 module.exports = errorHandler;
