@@ -34,14 +34,24 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.) in development
       if (!origin && env.NODE_ENV === 'development') {
         return callback(null, true);
       }
-      if (!origin || allowedOrigins.includes(origin)) {
+      
+      const isAllowed = allowedOrigins.some(allowedUrl => {
+        if (!allowedUrl) return false;
+        // Normalize by removing trailing slashes
+        const normalizedAllowed = allowedUrl.replace(/\/$/, '');
+        const normalizedOrigin = origin ? origin.replace(/\/$/, '') : '';
+        return normalizedAllowed === normalizedOrigin;
+      });
+
+      if (isAllowed || !origin) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        const err = new Error(`CORS blocked: Origin '${origin}' is not in allowed origins: ${allowedOrigins.join(', ')}`);
+        err.statusCode = 403;
+        callback(err);
       }
     },
     credentials: true,
