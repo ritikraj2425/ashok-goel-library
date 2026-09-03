@@ -30,5 +30,5 @@ module.exports = {
   ADMIN_ROOT_PASSWORD: process.env.ADMIN_ROOT_PASSWORD,
   STUDENT_FRONTEND_URL: process.env.STUDENT_FRONTEND_URL || 'http://localhost:3000',
   ADMIN_FRONTEND_URL: process.env.ADMIN_FRONTEND_URL || 'http://localhost:3001',
-  COOKIE_DOMAIN: process.env.COOKIE_DOMAIN || 'localhost',
+  COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
 };

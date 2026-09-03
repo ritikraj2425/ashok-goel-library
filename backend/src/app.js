@@ -25,7 +25,12 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration
-const allowedOrigins = [env.STUDENT_FRONTEND_URL, env.ADMIN_FRONTEND_URL].filter(Boolean);
+const allowedOrigins = [
+  env.STUDENT_FRONTEND_URL,
+  env.ADMIN_FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001'
+].filter(Boolean);
 app.use(
   cors({
     origin: function (origin, callback) {
