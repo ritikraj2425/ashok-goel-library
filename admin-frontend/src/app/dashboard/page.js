@@ -247,7 +247,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleCancelByAdmin(booking._id)}>End Session</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleCancelByAdmin(booking._id)}>Checkout</button>
                   </div>
                 </div>
               ))}
@@ -344,7 +344,15 @@ export default function AdminDashboardPage() {
                   <div><strong>Cabin:</strong> {detailBooking.cabinId?.name}</div>
                   <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
                   <div><strong>Slot:</strong> {detailBooking.timeSlotId}</div>
-                  <div><strong>Status:</strong> <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`}>{detailBooking.status.replace(/_/g, ' ')}</span></div>
+                  <div>
+                    <strong>Status:</strong> 
+                    <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`} style={{ marginLeft: 'var(--space-xs)' }}>
+                      {detailBooking.status === 'no_show' ? 'Missed Check-in' :
+                       detailBooking.status === 'cancelled_by_admin' ? 'Early Checkout / Admin Cancelled' :
+                       detailBooking.status === 'cancelled_by_student' ? 'User Cancelled' :
+                       detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
+                  </div>
                   <div><strong>Main Student:</strong> {detailBooking.mainStudent.name}</div>
                   <div><strong>Enrollment:</strong> {detailBooking.mainStudent.enrollmentNumber}</div>
                   <div><strong>Phone:</strong> {detailBooking.mainStudent.phoneNumber}</div>
@@ -359,6 +367,8 @@ export default function AdminDashboardPage() {
                       </ul>
                     </div>
                   )}
+                  {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
+                  {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                   <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
                   {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                   {detailBooking.checkedInAt && <div><strong>Checked In:</strong> {new Date(detailBooking.checkedInAt).toLocaleString()}</div>}

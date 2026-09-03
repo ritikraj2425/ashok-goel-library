@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/lib/auth';
-import { getAdminCabins, updateCabin, createCabin } from '@/lib/api';
+import { getAdminCabins, updateCabin, createCabin, deleteCabin } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 
 export default function CabinsPage() {
@@ -66,6 +66,22 @@ export default function CabinsPage() {
       setShowCreate(false);
       setNewCabin({ code: '', name: '', minPeople: 2, maxPeople: 6, isActive: true });
       setSuccess('Cabin created');
+      fetchCabins();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this cabin? This cannot be undone.')) return;
+    setSaving(true);
+    setError('');
+    try {
+      await deleteCabin(id);
+      setSuccess('Cabin deleted');
       fetchCabins();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -157,7 +173,16 @@ export default function CabinsPage() {
                       <td>{cabin.minPeople}</td>
                       <td>{cabin.maxPeople}</td>
                       <td><span className={`badge ${cabin.isActive ? 'badge-available' : 'badge-inactive'}`}>{cabin.isActive ? 'Active' : 'Inactive'}</span></td>
-                      <td><button className="btn btn-ghost btn-sm" onClick={() => startEdit(cabin)}>Edit</button></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(cabin)}>Edit</button>
+                          {admin?.role === 'root' && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger-color)' }} onClick={() => handleDelete(cabin._id)} disabled={saving}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </>
                   )}
                 </tr>

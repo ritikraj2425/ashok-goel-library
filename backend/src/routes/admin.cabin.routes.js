@@ -76,4 +76,31 @@ router.patch(
   }
 );
 
+/**
+ * DELETE /api/admin/cabins/:id
+ * Delete a cabin (root only).
+ */
+router.delete(
+  '/:id',
+  authAdmin,
+  requireRoot,
+  async (req, res, next) => {
+    try {
+      const cabin = await cabinService.deleteCabin(req.params.id);
+
+      await logAction({
+        action: 'CABIN_DELETED',
+        performedBy: req.admin._id,
+        targetType: 'Cabin',
+        targetId: cabin._id,
+        details: { code: cabin.code },
+      });
+
+      res.json({ message: 'Cabin deleted successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;

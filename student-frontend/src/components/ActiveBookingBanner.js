@@ -106,7 +106,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
         </div>
       )}
 
-      {(isApproved || isAwaitingCheckin) && (
+      {(isApproved || isAwaitingCheckin) && !hasStarted && (
         <div className="banner-actions">
           <button
             className="btn btn-danger btn-sm"

@@ -149,9 +149,36 @@ async function updateCabin(cabinId, data) {
   return updated;
 }
 
+/**
+ * Delete a cabin (admin).
+ */
+async function deleteCabin(cabinId) {
+  // Check if there are any active bookings for this cabin
+  const activeBookings = await Booking.findOne({
+    cabinId,
+    status: { $in: ACTIVE_STATUSES },
+  });
+
+  if (activeBookings) {
+    const error = new Error('Cannot delete cabin because it has active or upcoming bookings');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const deleted = await Cabin.findByIdAndDelete(cabinId);
+  if (!deleted) {
+    const error = new Error('Cabin not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return deleted;
+}
+
 module.exports = {
   getCabinStatusForStudents,
   getAllCabins,
   createCabin,
   updateCabin,
+  deleteCabin,
 };

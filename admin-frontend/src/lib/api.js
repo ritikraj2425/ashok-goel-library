@@ -133,6 +133,10 @@ export async function updateCabin(id, data) {
   });
 }
 
+export async function deleteCabin(id) {
+  return apiRequest(`/api/admin/cabins/${id}`, { method: 'DELETE' });
+}
+
 // --- Admin Users ---
 export async function getAdminUsers() {
   return apiRequest('/api/admin/users');

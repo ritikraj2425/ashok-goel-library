@@ -81,7 +81,7 @@ export default function MyBookingsPage() {
                     <th>People</th>
                     <th>Status</th>
                     <th>Requested</th>
-                    <th>Approved</th>
+                    <th>Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -95,7 +95,9 @@ export default function MyBookingsPage() {
                         <StatusBadge status={booking.status} />
                       </td>
                       <td>{formatDate(booking.requestedAt)}</td>
-                      <td>{formatDate(booking.approvedAt)}</td>
+                      <td style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', maxWidth: '200px' }}>
+                        {booking.rejectionReason || booking.cancellationReason || '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

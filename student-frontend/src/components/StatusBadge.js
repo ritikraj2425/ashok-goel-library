@@ -11,11 +11,11 @@ export default function StatusBadge({ status }) {
     cancel_requested: { label: 'Cancel Requested', className: 'badge-warning' },
     awaiting_checkin: { label: 'Awaiting Check-in', className: 'badge-warning' },
     checked_in: { label: 'Checked In', className: 'badge-available' },
-    no_show: { label: 'No Show', className: 'badge-rejected' },
+    no_show: { label: 'Missed Check-in', className: 'badge-rejected' },
     rejected: { label: 'Rejected', className: 'badge-rejected' },
     auto_rejected: { label: 'Auto-Rejected', className: 'badge-rejected' },
-    cancelled_by_student: { label: 'Cancelled', className: 'badge-inactive' },
-    cancelled_by_admin: { label: 'Cancelled', className: 'badge-inactive' },
+    cancelled_by_student: { label: 'User Cancelled', className: 'badge-inactive' },
+    cancelled_by_admin: { label: 'Early Checkout / Admin Cancelled', className: 'badge-inactive' },
     completed: { label: 'Completed', className: 'badge-completed' },
   };
 

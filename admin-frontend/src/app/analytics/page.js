@@ -313,6 +313,8 @@ export default function AnalyticsPage() {
                         </ul>
                       </div>
                     )}
+                    {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
+                    {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                     <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
                     {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                     {detailBooking.expiresAt && <div><strong>Expires:</strong> {new Date(detailBooking.expiresAt).toLocaleString()}</div>}
