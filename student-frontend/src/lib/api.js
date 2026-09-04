@@ -31,10 +31,19 @@ async function apiRequest(endpoint, options = {}) {
     credentials: 'include',
   });
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type');
+  const isJson = contentType && contentType.includes('application/json');
+
+  let data = null;
+  if (isJson) {
+    data = await response.json();
+  }
 
   if (!response.ok) {
-    throw new Error(data.error || 'Something went wrong');
+    const errorMessage = data?.error || (isJson ? 'Something went wrong' : `Server Error: ${response.status} ${response.statusText}`);
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    throw error;
   }
 
   return data;

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getAdminMe, adminLogout as apiLogout, getToken } from './api';
+import { getAdminMe, adminLogout as apiLogout, getToken, removeToken } from './api';
 
 const AdminAuthContext = createContext(null);
 
@@ -20,7 +20,10 @@ export function AdminAuthProvider({ children }) {
       const data = await getAdminMe();
       setAdmin(data.admin);
     } catch (error) {
-      setAdmin(null);
+      if (error.status === 401) {
+        setAdmin(null);
+        removeToken();
+      }
     } finally {
       setLoading(false);
     }
