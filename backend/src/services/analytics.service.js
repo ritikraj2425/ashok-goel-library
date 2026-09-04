@@ -156,7 +156,7 @@ async function getAnalytics(startDate, endDate) {
 /**
  * Get detailed bookings for a specific status and date range.
  */
-async function getAnalyticsBookings(startDate, endDate, status) {
+async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20) {
   await runCleanup();
 
   const start = new Date(startDate);
@@ -171,13 +171,20 @@ async function getAnalyticsBookings(startDate, endDate, status) {
     filter.status = status;
   }
 
-  const bookings = await Booking.find(filter)
-    .populate('studentUserId', 'name email')
-    .populate('cabinId', 'name code')
-    .sort({ requestedAt: -1 })
-    .lean();
+  const skip = (page - 1) * limit;
 
-  return bookings;
+  const [bookings, total] = await Promise.all([
+    Booking.find(filter)
+      .populate('studentUserId', 'name email')
+      .populate('cabinId', 'name code')
+      .sort({ requestedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Booking.countDocuments(filter)
+  ]);
+
+  return { bookings, totalPages: Math.ceil(total / limit), currentPage: page };
 }
 
 module.exports = { getAnalytics, getAnalyticsBookings };

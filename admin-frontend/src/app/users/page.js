@@ -22,10 +22,14 @@ export default function UsersPage() {
   const [resetPassword, setResetPassword] = useState('');
   const [confirm, setConfirm] = useState(null);
 
-  const fetchAdmins = useCallback(async () => {
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const fetchAdmins = useCallback(async (p) => {
     try {
-      const data = await getAdminUsers();
+      const data = await getAdminUsers(p);
       setAdmins(data.admins || []);
+      setTotalPages(data.totalPages || 1);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -36,8 +40,8 @@ export default function UsersPage() {
   useEffect(() => {
     if (!authLoading && !admin) { router.push('/login'); return; }
     if (admin && admin.role !== 'root') { router.push('/dashboard'); return; }
-    if (admin) fetchAdmins();
-  }, [admin, authLoading, router, fetchAdmins]);
+    if (admin) fetchAdmins(page);
+  }, [admin, authLoading, router, fetchAdmins, page]);
 
   const showMsg = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3000); };
 
@@ -50,7 +54,7 @@ export default function UsersPage() {
       setShowCreate(false);
       setNewAdmin({ username: '', password: '' });
       showMsg('Admin created');
-      fetchAdmins();
+      fetchAdmins(page);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -62,7 +66,7 @@ export default function UsersPage() {
     try {
       await updateAdminUser(id, { isActive: !isActive });
       showMsg(isActive ? 'Admin deactivated' : 'Admin activated');
-      fetchAdmins();
+      fetchAdmins(page);
     } catch (err) {
       setError(err.message);
     }
@@ -96,7 +100,7 @@ export default function UsersPage() {
         await deleteAdminUser(id);
         setConfirm(null);
         showMsg('Admin deleted');
-        fetchAdmins();
+        fetchAdmins(page);
       },
     });
   };
@@ -179,6 +183,26 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-md)', marginTop: 'var(--space-xl)' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Previous
+          </button>
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
         </div>
 
         {confirm && (

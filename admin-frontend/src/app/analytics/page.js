@@ -21,11 +21,11 @@ const statusMap = {
 
   awaiting_checkin: { label: 'Awaiting Check-in', className: 'badge-warning' },
   checked_in: { label: 'Checked In', className: 'badge-available' },
-  no_show: { label: 'No Show', className: 'badge-rejected' },
+  no_show: { label: 'Missed Check-in', className: 'badge-rejected' },
   rejected: { label: 'Rejected', className: 'badge-rejected' },
   auto_rejected: { label: 'Auto-Rejected', className: 'badge-rejected' },
-  cancelled_by_student: { label: 'Cancelled (Student)', className: 'badge-inactive' },
-  cancelled_by_admin: { label: 'Cancelled (Admin)', className: 'badge-inactive' },
+  cancelled_by_student: { label: 'User Cancelled', className: 'badge-inactive' },
+  cancelled_by_admin: { label: 'Early Checkout', className: 'badge-inactive' },
   completed: { label: 'Completed', className: 'badge-completed' },
 };
 
@@ -40,24 +40,32 @@ export default function AnalyticsPage() {
   const [statusBookings, setStatusBookings] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [loadingBookings, setLoadingBookings] = useState(false);
-  
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [detailBooking, setDetailBooking] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const fetchBookings = async (status, p) => {
+    setLoadingBookings(true);
+    try {
+      const data = await getAnalyticsBookings({ period, status, page: p });
+      setStatusBookings(data.bookings || []);
+      setTotalPages(data.totalPages || 1);
+    } catch (e) {
+      console.error(e);
+      alert(e.message);
+      if (p === 1) setSelectedStatus(null);
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
 
   const handleBadgeClick = async (status, count) => {
     if (count === 0) return;
     setSelectedStatus(status);
-    setLoadingBookings(true);
-    try {
-      const bookings = await getAnalyticsBookings({ period, status });
-      setStatusBookings(bookings);
-    } catch (e) {
-      console.error(e);
-      alert(e.message);
-      setSelectedStatus(null);
-    } finally {
-      setLoadingBookings(false);
-    }
+    setPage(1);
+    fetchBookings(status, 1);
   };
 
   const handleViewDetail = async (id) => {
@@ -225,7 +233,7 @@ export default function AnalyticsPage() {
             )}
           </div>
         </div>
-        
+
         {/* Booking List Modal */}
         {selectedStatus && (
           <div className="modal-overlay" onClick={() => setSelectedStatus(null)}>
@@ -275,6 +283,36 @@ export default function AnalyticsPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {!loadingBookings && totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={page <= 1}
+                      onClick={() => {
+                        const newPage = page - 1;
+                        setPage(newPage);
+                        fetchBookings(selectedStatus, newPage);
+                      }}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}>
+                      Page {page} of {totalPages}
+                    </span>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={page >= totalPages}
+                      onClick={() => {
+                        const newPage = page + 1;
+                        setPage(newPage);
+                        fetchBookings(selectedStatus, newPage);
+                      }}
+                    >
+                      Next
+                    </button>
                   </div>
                 )}
               </div>

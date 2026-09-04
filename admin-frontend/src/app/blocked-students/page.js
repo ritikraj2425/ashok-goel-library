@@ -18,14 +18,17 @@ export default function BlockedStudentsPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [blocking, setBlocking] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [confirm, setConfirm] = useState(null);
 
-  const fetchStudents = useCallback(async () => {
+  const fetchStudents = useCallback(async (p) => {
     setLoading(true);
     setError('');
     try {
-      const data = await getBlockedStudents();
-      setStudents(data.blockedStudents);
+      const data = await getBlockedStudents(p);
+      setStudents(data.blockedStudents || []);
+      setTotalPages(data.totalPages || 1);
     } catch (err) {
       setError(err.message || 'Failed to fetch blocked students');
     } finally {
@@ -35,9 +38,9 @@ export default function BlockedStudentsPage() {
 
   useEffect(() => {
     if (admin) {
-      fetchStudents();
+      fetchStudents(page);
     }
-  }, [admin, fetchStudents]);
+  }, [admin, fetchStudents, page]);
 
   const showSuccess = (msg) => {
     setSuccess(msg);
@@ -55,7 +58,7 @@ export default function BlockedStudentsPage() {
           await unblockStudent(studentId);
           showSuccess(`${studentName} successfully unblocked`);
           setConfirm(null);
-          fetchStudents();
+          fetchStudents(page);
         } catch (e) {
           alert(e.message || 'Failed to unblock student');
           setConfirm(null);
@@ -95,7 +98,7 @@ export default function BlockedStudentsPage() {
       await blockStudent(blockEmail.trim());
       showSuccess(`Successfully blocked student with email: ${blockEmail}`);
       setBlockEmail('');
-      fetchStudents();
+      fetchStudents(page);
     } catch (err) {
       setError(err.message || 'Failed to block student');
     } finally {
@@ -231,6 +234,26 @@ export default function BlockedStudentsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-md)', marginTop: 'var(--space-xl)' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Previous
+          </button>
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
         </div>
       </main>
 

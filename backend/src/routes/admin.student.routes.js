@@ -11,15 +11,33 @@ router.use(authAdmin);
  */
 router.get('/blocked', async (req, res, next) => {
   try {
+    const { page, limit } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
+
     const now = new Date();
-    const blockedStudents = await User.find({
+    const filter = {
       $or: [
         { isBlocked: true },
         { blockedUntil: { $gt: now } }
       ]
-    }).select('name email enrollmentNumber isBlocked blockedUntil').lean();
+    };
 
-    res.json({ blockedStudents });
+    const [blockedStudents, total] = await Promise.all([
+      User.find(filter)
+        .select('name email enrollmentNumber isBlocked blockedUntil')
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+
+    res.json({ 
+      blockedStudents, 
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum 
+    });
   } catch (error) {
     next(error);
   }

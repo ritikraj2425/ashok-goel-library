@@ -15,7 +15,7 @@ export default function StatusBadge({ status }) {
     rejected: { label: 'Rejected', className: 'badge-rejected' },
     auto_rejected: { label: 'Auto-Rejected', className: 'badge-rejected' },
     cancelled_by_student: { label: 'User Cancelled', className: 'badge-inactive' },
-    cancelled_by_admin: { label: 'Early Checkout / Admin Cancelled', className: 'badge-inactive' },
+    cancelled_by_admin: { label: 'Early Checkout', className: 'badge-inactive' },
     completed: { label: 'Completed', className: 'badge-completed' },
   };
 

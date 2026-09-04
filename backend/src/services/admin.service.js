@@ -30,12 +30,18 @@ async function createAdmin(username, password, createdById) {
 /**
  * Get all admins (root-only action).
  */
-async function getAllAdmins() {
-  const admins = await Admin.find()
-    .select('-passwordHash')
-    .sort({ createdAt: 1 })
-    .lean();
-  return admins;
+async function getAllAdmins(page = 1, limit = 20) {
+  const skip = (page - 1) * limit;
+  const [admins, total] = await Promise.all([
+    Admin.find()
+      .select('-passwordHash')
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Admin.countDocuments()
+  ]);
+  return { admins, totalPages: Math.ceil(total / limit), currentPage: page };
 }
 
 /**

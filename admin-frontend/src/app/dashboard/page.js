@@ -345,12 +345,12 @@ export default function AdminDashboardPage() {
                   <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
                   <div><strong>Slot:</strong> {detailBooking.timeSlotId}</div>
                   <div>
-                    <strong>Status:</strong> 
+                    <strong>Status:</strong>
                     <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`} style={{ marginLeft: 'var(--space-xs)' }}>
                       {detailBooking.status === 'no_show' ? 'Missed Check-in' :
-                       detailBooking.status === 'cancelled_by_admin' ? 'Early Checkout / Admin Cancelled' :
-                       detailBooking.status === 'cancelled_by_student' ? 'User Cancelled' :
-                       detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        detailBooking.status === 'cancelled_by_admin' ? 'Early Checkout' :
+                          detailBooking.status === 'cancelled_by_student' ? 'User Cancelled' :
+                            detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </span>
                   </div>
                   <div><strong>Main Student:</strong> {detailBooking.mainStudent.name}</div>

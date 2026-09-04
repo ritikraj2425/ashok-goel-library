@@ -1,3 +1,5 @@
+const env = require('../config/env');
+
 /**
  * Global error handler middleware.
  * Catches all unhandled errors and returns a consistent JSON response.

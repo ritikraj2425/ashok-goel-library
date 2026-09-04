@@ -23,8 +23,10 @@ const connectDB = require('./config/db');
 
 const app = express();
 
-// Initialize DB connection for serverless environments (Vercel)
-connectDB();
+// Initialize DB connection middleware for serverless environments (Vercel)
+app.use((req, res, next) => {
+  connectDB().then(() => next()).catch(next);
+});
 
 // --- Security middleware ---
 app.use(helmet());

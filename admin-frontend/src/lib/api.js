@@ -147,8 +147,8 @@ export async function deleteCabin(id) {
 }
 
 // --- Admin Users ---
-export async function getAdminUsers() {
-  return apiRequest('/api/admin/users');
+export async function getAdminUsers(page = 1, limit = 20) {
+  return apiRequest(`/api/admin/users?page=${page}&limit=${limit}`);
 }
 
 export async function createAdminUser(data) {
@@ -170,8 +170,8 @@ export async function deleteAdminUser(id) {
 }
 
 // --- Students ---
-export async function getBlockedStudents() {
-  return apiRequest('/api/admin/students/blocked');
+export async function getBlockedStudents(page = 1, limit = 20) {
+  return apiRequest(`/api/admin/students/blocked?page=${page}&limit=${limit}`);
 }
 
 export async function unblockStudent(id) {

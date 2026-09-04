@@ -17,8 +17,12 @@ router.use(authAdmin, requireRoot);
  */
 router.get('/', async (req, res, next) => {
   try {
-    const admins = await adminService.getAllAdmins();
-    res.json({ admins });
+    const { page, limit } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    
+    const result = await adminService.getAllAdmins(pageNum, limitNum);
+    res.json(result); // result already contains admins, totalPages, currentPage
   } catch (error) {
     next(error);
   }
