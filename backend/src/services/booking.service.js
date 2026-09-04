@@ -24,7 +24,7 @@ async function createBookingRequest(userId, body) {
   // Run cleanup first to clear expired bookings
   await runCleanup();
 
-  const { cabinId, timeSlotId, mainStudent, groupMembers = [], peopleCount } = body;
+  const { cabinId, timeSlotId, userType = 'student', mainStudent, groupMembers = [], peopleCount } = body;
 
   const user = await User.findById(userId);
   if (!user) throw createError('User not found');
@@ -43,10 +43,11 @@ async function createBookingRequest(userId, body) {
   if (!cabin.isActive) throw createError('This cabin is currently inactive and cannot be booked');
 
   // --- Validate people count ---
-  if (peopleCount < cabin.minPeople || peopleCount > cabin.maxPeople) {
-    throw createError(
-      `People count must be between ${cabin.minPeople} and ${cabin.maxPeople} for this cabin`
-    );
+  if (peopleCount > cabin.maxPeople) {
+    throw createError(`People count cannot exceed maximum of ${cabin.maxPeople} for this cabin`);
+  }
+  if (userType === 'student' && peopleCount < cabin.minPeople) {
+    throw createError(`People count must be at least ${cabin.minPeople} for this cabin`);
   }
 
   // --- Validate time slot ---
@@ -97,6 +98,42 @@ async function createBookingRequest(userId, body) {
 
   // --- Collect all enrollment numbers for duplicate checks ---
   const allEnrollments = [mainEnrollment, ...normalizedGroupMembers.map((m) => m.enrollmentNumber)];
+
+  // --- Rule 11: Max 2 bookings per day per enrollment ---
+  const todaysBookings = await Booking.find({
+    bookingDate: slotDetails.dateString,
+    status: {
+      $in: [
+        BOOKING_STATUS.PENDING,
+        BOOKING_STATUS.APPROVED,
+        BOOKING_STATUS.AWAITING_CHECKIN,
+        BOOKING_STATUS.CHECKED_IN,
+        BOOKING_STATUS.COMPLETED,
+      ],
+    },
+    $or: [
+      { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
+      { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
+    ],
+  }).select('mainStudent groupMembers').lean();
+
+  const enrollmentCounts = {};
+  for (const b of todaysBookings) {
+    if (b.mainStudent?.enrollmentNumber) {
+      enrollmentCounts[b.mainStudent.enrollmentNumber] = (enrollmentCounts[b.mainStudent.enrollmentNumber] || 0) + 1;
+    }
+    for (const member of (b.groupMembers || [])) {
+      if (member.enrollmentNumber) {
+        enrollmentCounts[member.enrollmentNumber] = (enrollmentCounts[member.enrollmentNumber] || 0) + 1;
+      }
+    }
+  }
+
+  for (const enrollment of allEnrollments) {
+    if (enrollmentCounts[enrollment] >= 2) {
+      throw createError(`Enrollment number ${enrollment} has already 2 bookings complete on a day. More than 2 slots of cabin are not allowed for a user in a day.`);
+    }
+  }
 
   // --- Rule 3: User cannot book overlapping slots ---
   const userOverlappingBooking = await Booking.findOne({
@@ -152,6 +189,7 @@ async function createBookingRequest(userId, body) {
   const booking = await Booking.create({
     cabinId: cabin._id,
     studentUserId: userId,
+    userType,
     mainStudent: normalizedMain,
     groupMembers: normalizedGroupMembers,
     peopleCount,

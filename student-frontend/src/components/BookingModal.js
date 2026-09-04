@@ -6,7 +6,8 @@ import { createBookingRequest } from '@/lib/api';
 
 export default function BookingModal({ cabin, onClose, onSuccess }) {
   const { user } = useAuth();
-  
+
+  const [userType, setUserType] = useState('student');
   const [formData, setFormData] = useState({
     mainStudentName: user?.name || '',
     mainStudentEnrollment: user?.enrollmentNumber || '',
@@ -62,39 +63,54 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
       const mainEnrollment = formData.mainStudentEnrollment.trim();
       const mainPhone = formData.mainStudentPhone.trim();
 
-      if (!nameRegex.test(mainName)) throw new Error('Main student name should only contain letters.');
-      if (!enrollmentRegex.test(mainEnrollment)) throw new Error('Main student enrollment must be numbers only.');
-      if (!phoneRegex.test(mainPhone)) throw new Error('Main student phone must be exactly 10 digits.');
+      const validateEnrollment = (enroll, label) => {
+        if (userType === 'student') {
+          if (enroll.startsWith('23')) {
+            if (enroll.length !== 6) throw new Error(`${label} must be 6 digits.`);
+          } else if (enroll.match(/^(2[4-9]|[3-9]\d)/)) {
+            if (enroll.length !== 10) throw new Error(`${label} must be 10 digits.`);
+          }
+        }
+      };
+
+      if (!nameRegex.test(mainName)) throw new Error('Name should only contain letters.');
+      if (!enrollmentRegex.test(mainEnrollment)) throw new Error('Enrollment/ID must be numbers only.');
+      validateEnrollment(mainEnrollment, 'Main student enrollment');
+      if (!phoneRegex.test(mainPhone)) throw new Error('Phone must be exactly 10 digits.');
       if (!formData.timeSlotId) throw new Error('Please select a valid time slot.');
 
       const enrollments = new Set([mainEnrollment]);
 
-      for (let i = 0; i < groupMembers.length; i++) {
-        const m = groupMembers[i];
-        const mName = m.name.trim();
-        const mEnrollment = m.enrollmentNumber.trim();
+      if (userType === 'student') {
+        for (let i = 0; i < groupMembers.length; i++) {
+          const m = groupMembers[i];
+          const mName = m.name.trim();
+          const mEnrollment = m.enrollmentNumber.trim();
 
-        if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 1} name should only contain letters.`);
-        if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 1} enrollment must be numbers only.`);
-        
-        if (enrollments.has(mEnrollment)) {
-          throw new Error(`Duplicate enrollment number found: ${mEnrollment}`);
+          if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 1} name should only contain letters.`);
+          if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 1} enrollment must be numbers only.`);
+          validateEnrollment(mEnrollment, `Group member ${i + 1} enrollment`);
+
+          if (enrollments.has(mEnrollment)) {
+            throw new Error(`Duplicate enrollment number found: ${mEnrollment}`);
+          }
+          enrollments.add(mEnrollment);
         }
-        enrollments.add(mEnrollment);
       }
 
       await createBookingRequest({
         cabinId: cabin.id,
+        userType,
         mainStudent: {
           name: formData.mainStudentName.trim(),
           enrollmentNumber: formData.mainStudentEnrollment.trim(),
           phoneNumber: formData.mainStudentPhone.trim(),
         },
-        groupMembers: groupMembers.map((m) => ({
+        groupMembers: userType === 'student' ? groupMembers.map((m) => ({
           name: m.name.trim(),
           enrollmentNumber: m.enrollmentNumber.trim(),
-        })),
-        peopleCount: formData.peopleCount,
+        })) : [],
+        peopleCount: userType === 'student' ? formData.peopleCount : 1,
         timeSlotId: formData.timeSlotId,
       });
       onSuccess();
@@ -124,6 +140,20 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
 
+            <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
+              <label className="form-label">User Type <span className="required">*</span></label>
+              <div style={{ display: 'flex', gap: 'var(--space-lg)', marginTop: 'var(--space-xs)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
+                  <input type="radio" name="userType" value="student" checked={userType === 'student'} onChange={() => setUserType('student')} />
+                  <span>Student</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
+                  <input type="radio" name="userType" value="faculty" checked={userType === 'faculty'} onChange={() => setUserType('faculty')} />
+                  <span>Faculty</span>
+                </label>
+              </div>
+            </div>
+
 
             <div className="form-group">
               <label className="form-label">
@@ -147,26 +177,28 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                People Count <span className="required">*</span>
-              </label>
-              <select
-                className="form-select"
-                value={formData.peopleCount}
-                onChange={handlePeopleCountChange}
-              >
-                {countOptions.map((n) => (
-                  <option key={n} value={n}>
-                    {n} {n === 1 ? 'person' : 'people'}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {userType === 'student' && (
+              <div className="form-group">
+                <label className="form-label">
+                  People Count <span className="required">*</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.peopleCount}
+                  onChange={handlePeopleCountChange}
+                >
+                  {countOptions.map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? 'person' : 'people'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <div style={{ marginBottom: 'var(--space-lg)' }}>
+            <div style={{ marginBottom: userType === 'student' ? 'var(--space-lg)' : 0 }}>
               <span className="form-label" style={{ display: 'block', marginBottom: 'var(--space-md)', fontWeight: 600 }}>
-                Main Student (Booking Owner)
+                {userType === 'student' ? 'Main Student (Booking Owner)' : 'Faculty Details'}
               </span>
               <div className="form-group">
                 <label className="form-label">
@@ -185,7 +217,7 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
               </div>
               <div className="form-group">
                 <label className="form-label">
-                  Enrollment Number <span className="required">*</span>
+                  {userType === 'student' ? 'Enrollment Number' : 'Employee ID'} <span className="required">*</span>
                 </label>
                 <input
                   type="text"
@@ -194,7 +226,7 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, mainStudentEnrollment: e.target.value }))
                   }
-                  placeholder="Enter enrollment number"
+                  placeholder={`Enter ${userType === 'student' ? 'enrollment number' : 'employee ID'}`}
                   required
                 />
               </div>
@@ -215,7 +247,7 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
               </div>
             </div>
 
-            {groupMembers.length > 0 && (
+            {userType === 'student' && groupMembers.length > 0 && (
               <div className="group-members-section">
                 <span className="form-label" style={{ display: 'block', marginBottom: 'var(--space-md)', fontWeight: 600 }}>
                   Group Members ({groupMembers.length})

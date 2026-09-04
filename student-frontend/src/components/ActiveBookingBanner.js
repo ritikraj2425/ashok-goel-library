@@ -24,6 +24,22 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
   else if (isAwaitingCheckin) title = 'Awaiting Check-in (Go to Cabin)';
   else if (isCheckedIn) title = 'Your Active Session';
 
+  const formatTimeSlot = (slotStr) => {
+    if (!slotStr) return '';
+    const formatTime = (time24) => {
+      const [h, m] = time24.split(':');
+      if (!h || !m) return time24;
+      const hour = parseInt(h, 10);
+      const suffix = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${m} ${suffix}`;
+    };
+    if (slotStr.includes('-')) {
+      return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+    }
+    return formatTime(slotStr);
+  };
+
   return (
     <div className={`active-booking-banner ${isPending ? 'pending' : isAwaitingCheckin ? 'warning' : ''}`}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
@@ -56,7 +72,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
         </div>
         <div className="booking-detail">
           <span className="label">Time Slot</span>
-          {booking.timeSlotId}
+          {formatTimeSlot(booking.timeSlotId)}
         </div>
         {(!isPending && !hasStarted) ? (
           <div className="booking-detail">
@@ -78,6 +94,12 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
           </div>
         )}
       </div>
+
+      {(isApproved || isAwaitingCheckin) && (
+        <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-sm)', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-sm)', fontWeight: 500, borderLeft: '3px solid var(--color-error)' }}>
+          <strong style={{ color: 'var(--color-error)' }}>Important:</strong> Student must do check-in within 10 mins from the time the time slot starts.
+        </div>
+      )}
 
       {booking.groupMembers && booking.groupMembers.length > 0 && (
         <div style={{ marginTop: 'var(--space-md)' }}>

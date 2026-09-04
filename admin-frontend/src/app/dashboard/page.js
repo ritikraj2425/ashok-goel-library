@@ -10,6 +10,23 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 const POLL_INTERVAL = 10000;
 
+const formatTimeSlot = (slotStr) => {
+  if (!slotStr) return '';
+  const formatTime = (time24) => {
+    const [h, m] = time24.split(':');
+    if (!h || !m) return time24;
+    const hour = parseInt(h, 10);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${suffix}`;
+  };
+  
+  if (slotStr.includes('-')) {
+    return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+  }
+  return formatTime(slotStr);
+};
+
 export default function AdminDashboardPage() {
   const { admin, loading: authLoading } = useAdminAuth();
   const router = useRouter();
@@ -156,7 +173,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{booking.timeSlotId}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
                     <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
                     <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
@@ -210,7 +227,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{booking.timeSlotId}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Deadline</span>
                       <CountdownTimer targetDate={booking.checkInDeadlineAt} />
@@ -240,10 +257,10 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{booking.timeSlotId}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
-                      <span className="label">Ends at</span>
-                      <span>{new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="label">Ends in</span>
+                      <CountdownTimer targetDate={booking.endTime} />
                     </div>
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
@@ -270,11 +287,8 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{booking.timeSlotId}</div>
-                    <div className="booking-card-detail">
-                      <span className="label">Starts at</span>
-                      <span>{new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
+
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="btn btn-danger btn-sm" onClick={() => handleCancelByAdmin(booking._id)}>Cancel Booking</button>
@@ -308,7 +322,7 @@ export default function AdminDashboardPage() {
                     <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-xs)', fontWeight: 600, textTransform: 'uppercase' }}>Available Slots</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
                       {cabin.availableSlots.map(slot => (
-                        <span key={slot.id} className="badge badge-available" style={{ fontSize: '11px', padding: '2px 8px' }}>{slot.id}</span>
+                        <span key={slot.id} className="badge badge-available" style={{ fontSize: '11px', padding: '2px 8px' }}>{formatTimeSlot(slot.id)}</span>
                       ))}
                     </div>
                   </div>
@@ -343,7 +357,7 @@ export default function AdminDashboardPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                   <div><strong>Cabin:</strong> {detailBooking.cabinId?.name}</div>
                   <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
-                  <div><strong>Slot:</strong> {detailBooking.timeSlotId}</div>
+                  <div><strong>Slot:</strong> {formatTimeSlot(detailBooking.timeSlotId)}</div>
                   <div>
                     <strong>Status:</strong>
                     <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`} style={{ marginLeft: 'var(--space-xs)' }}>

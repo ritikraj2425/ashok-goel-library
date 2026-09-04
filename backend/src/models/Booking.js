@@ -23,6 +23,13 @@ const bookingSchema = new mongoose.Schema({
     index: true,
   },
 
+  userType: {
+    type: String,
+    enum: ['student', 'faculty'],
+    default: 'student',
+    required: true,
+  },
+
   mainStudent: {
     name: { type: String, required: true, trim: true },
     enrollmentNumber: { type: String, required: true, trim: true, uppercase: true },

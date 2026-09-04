@@ -15,6 +15,23 @@ function formatDuration(ms) {
   return `${hours}h ${remainingMin}m`;
 }
 
+const formatTimeSlot = (slotStr) => {
+  if (!slotStr) return '';
+  const formatTime = (time24) => {
+    const [h, m] = time24.split(':');
+    if (!h || !m) return time24;
+    const hour = parseInt(h, 10);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${suffix}`;
+  };
+  
+  if (slotStr.includes('-')) {
+    return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+  }
+  return formatTime(slotStr);
+};
+
 const statusMap = {
   pending: { label: 'Pending', className: 'badge-pending' },
   approved: { label: 'Approved', className: 'badge-available' },
@@ -226,7 +243,7 @@ export default function AnalyticsPage() {
                       style={{ height: `${Math.max((s.count / maxPeakCount) * 100, 2)}px`, width: '40px', backgroundColor: 'var(--color-primary)', borderRadius: '4px' }}
                       title={`${s.slot} - ${s.count} bookings`}
                     />
-                    <span style={{ fontSize: '10px', marginTop: '4px', textAlign: 'center', color: 'var(--color-text-muted)' }}>{s.slot}</span>
+                    <span style={{ fontSize: '10px', marginTop: '4px', textAlign: 'center', color: 'var(--color-text-muted)' }}>{formatTimeSlot(s.slot)}</span>
                   </div>
                 ))}
               </div>
@@ -263,7 +280,7 @@ export default function AnalyticsPage() {
                         {statusBookings.map(b => (
                           <tr key={b._id} onClick={() => handleViewDetail(b._id)} style={{ cursor: 'pointer' }} className="table-row-hover">
                             <td>{b.bookingDate}</td>
-                            <td>{b.timeSlotId}</td>
+                            <td>{formatTimeSlot(b.timeSlotId)}</td>
                             <td>{b.studentUserId?.name || b.mainStudent?.name}</td>
                             <td>{b.studentUserId?.email || '-'}</td>
                             <td>{b.mainStudent?.phoneNumber || '-'}</td>
@@ -335,7 +352,7 @@ export default function AnalyticsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                     <div><strong>Cabin:</strong> {detailBooking.cabinId?.name}</div>
                     <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
-                    <div><strong>Slot:</strong> {detailBooking.timeSlotId}</div>
+                    <div><strong>Slot:</strong> {formatTimeSlot(detailBooking.timeSlotId)}</div>
                     <div><strong>Status:</strong> <span className={`badge ${statusMap[detailBooking.status]?.className || 'badge-default'}`}>{statusMap[detailBooking.status]?.label || detailBooking.status}</span></div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent?.name}</div>
                     <div><strong>Enrollment:</strong> {detailBooking.mainStudent?.enrollmentNumber}</div>

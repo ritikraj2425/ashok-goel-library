@@ -154,10 +154,9 @@ export default function DashboardPage() {
         <div className="rules-section">
           <h3>Library Cabin Booking Rules</h3>
           <ul>
-            <li>Cabins for the day can only be booked on the same day.</li>
-            <li>All booking requests will only get approved after 9:30 AM.</li>
+            <li>Cabins for the day can be booked on the same day and all requests will only get approved after 9:00 AM.</li>
             <li>Students can book a cabin for a one-hour slot.</li>
-            <li>For longer durations, multiple slots must be booked.</li>
+            <li>An enrollment number can book a maximum of 2 slots in a day.</li>
             <li>Each slot must be approved by an admin within 15 mins of the request.</li>
             <li>Students must check-in within 10 mins of the slot start time.</li>
             <li>Missing check-in results in a two-day block.</li>
