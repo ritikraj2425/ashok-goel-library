@@ -13,6 +13,7 @@ export default function Sidebar() {
   const links = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/analytics', label: 'Analytics' },
+    { href: '/all-users', label: 'All Users' },
     { href: '/blocked-students', label: 'Blocked Students' },
   ];
 

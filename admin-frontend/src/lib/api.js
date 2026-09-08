@@ -170,6 +170,10 @@ export async function deleteAdminUser(id) {
 }
 
 // --- Students ---
+export async function getAllStudents(page = 1, limit = 20, search = '') {
+  return apiRequest(`/api/admin/students?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+}
+
 export async function getBlockedStudents(page = 1, limit = 20) {
   return apiRequest(`/api/admin/students/blocked?page=${page}&limit=${limit}`);
 }

@@ -87,9 +87,9 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
           const mName = m.name.trim();
           const mEnrollment = m.enrollmentNumber.trim();
 
-          if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 1} name should only contain letters.`);
-          if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 1} enrollment must be numbers only.`);
-          validateEnrollment(mEnrollment, `Group member ${i + 1} enrollment`);
+          if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 2} name should only contain letters.`);
+          if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 2} enrollment must be numbers only.`);
+          validateEnrollment(mEnrollment, `Group member ${i + 2} enrollment`);
 
           if (enrollments.has(mEnrollment)) {
             throw new Error(`Duplicate enrollment number found: ${mEnrollment}`);
@@ -254,7 +254,7 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
                 </span>
                 {groupMembers.map((member, index) => (
                   <div key={index}>
-                    <div className="group-member-label">Member {index + 1}</div>
+                    <div className="group-member-label">Member {index + 2}</div>
                     <div className="group-member-row">
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">

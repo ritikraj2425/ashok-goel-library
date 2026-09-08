@@ -8,6 +8,47 @@ const { BOOKING_STATUS } = require('../utils/constants');
 router.use(authAdmin);
 
 /**
+ * GET /api/admin/students
+ * Get all students.
+ */
+router.get('/', async (req, res, next) => {
+  try {
+    const { page, limit, search } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { enrollmentNumber: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [students, total] = await Promise.all([
+      User.find(filter)
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+
+    res.json({ 
+      students, 
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum,
+      totalStudents: total
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/admin/students/blocked
  * Get all temporarily blocked students.
  */

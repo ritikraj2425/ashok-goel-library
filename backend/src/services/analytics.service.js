@@ -5,7 +5,7 @@ const { runCleanup } = require('./cleanup.service');
 /**
  * Get analytics data for a given date range.
  */
-async function getAnalytics(startDate, endDate) {
+async function getAnalytics(startDate, endDate, search = '') {
   await runCleanup();
 
   const start = new Date(startDate);
@@ -14,11 +14,20 @@ async function getAnalytics(startDate, endDate) {
   const end = new Date(endDate);
   end.setHours(23, 59, 59, 999);
 
-  const dateFilter = { requestedAt: { $gte: start, $lte: end } };
+  const filter = { requestedAt: { $gte: start, $lte: end } };
+
+  if (search) {
+    filter.$or = [
+      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.enrollmentNumber': search },
+      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.enrollmentNumber': search }
+    ];
+  }
 
   // --- Status counts ---
   const statusCounts = await Booking.aggregate([
-    { $match: dateFilter },
+    { $match: filter },
     { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
 
@@ -46,8 +55,16 @@ async function getAnalytics(startDate, endDate) {
   const cabinUsage = await Booking.aggregate([
     {
       $match: {
-        ...dateFilter,
-        status: { $in: [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED] },
+        ...filter,
+        status: { 
+          $in: [
+            BOOKING_STATUS.APPROVED, 
+            BOOKING_STATUS.COMPLETED,
+            BOOKING_STATUS.AWAITING_CHECKIN,
+            BOOKING_STATUS.CHECKED_IN,
+            BOOKING_STATUS.CANCELLED_BY_ADMIN
+          ] 
+        },
       },
     },
     {
@@ -75,8 +92,16 @@ async function getAnalytics(startDate, endDate) {
   const popularSlotsRaw = await Booking.aggregate([
     {
       $match: {
-        ...dateFilter,
-        status: { $in: [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED] },
+        ...filter,
+        status: { 
+          $in: [
+            BOOKING_STATUS.APPROVED, 
+            BOOKING_STATUS.COMPLETED,
+            BOOKING_STATUS.AWAITING_CHECKIN,
+            BOOKING_STATUS.CHECKED_IN,
+            BOOKING_STATUS.CANCELLED_BY_ADMIN
+          ] 
+        },
       },
     },
     {
@@ -97,7 +122,7 @@ async function getAnalytics(startDate, endDate) {
   const avgApprovalTime = await Booking.aggregate([
     {
       $match: {
-        ...dateFilter,
+        ...filter,
         approvedAt: { $exists: true },
         status: { $in: [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED] },
       },
@@ -119,7 +144,7 @@ async function getAnalytics(startDate, endDate) {
   const avgOccupancy = await Booking.aggregate([
     {
       $match: {
-        ...dateFilter,
+        ...filter,
         completedAt: { $exists: true },
         approvedAt: { $exists: true },
         status: BOOKING_STATUS.COMPLETED,
@@ -166,7 +191,7 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   end.setHours(23, 59, 59, 999);
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
-  
+
   if (status && status !== 'total') {
     filter.status = status;
   }
@@ -182,7 +207,7 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
 
   const skip = (page - 1) * limit;
 
-  const [bookings, total] = await Promise.all([
+  const [bookings, total, totalStudentsAgg] = await Promise.all([
     Booking.find(filter)
       .populate('studentUserId', 'name email')
       .populate('cabinId', 'name code')
@@ -190,10 +215,21 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
       .skip(skip)
       .limit(limit)
       .lean(),
-    Booking.countDocuments(filter)
+    Booking.countDocuments(filter),
+    Booking.aggregate([
+      { $match: filter },
+      { $group: { _id: null, totalStudents: { $sum: '$peopleCount' } } }
+    ])
   ]);
 
-  return { bookings, totalPages: Math.ceil(total / limit), currentPage: page };
+  const totalStudents = totalStudentsAgg.length > 0 ? totalStudentsAgg[0].totalStudents : 0;
+
+  return {
+    bookings,
+    totalPages: Math.ceil(total / limit),
+    currentPage: page,
+    totalStudents,
+  };
 }
 
 module.exports = { getAnalytics, getAnalyticsBookings };

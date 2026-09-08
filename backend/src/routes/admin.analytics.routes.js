@@ -10,7 +10,7 @@ const { getAnalytics } = require('../services/analytics.service');
  */
 router.get('/', authAdmin, async (req, res, next) => {
   try {
-    let { startDate, endDate, period } = req.query;
+    let { startDate, endDate, period, search } = req.query;
 
     const now = new Date();
 
@@ -29,7 +29,7 @@ router.get('/', authAdmin, async (req, res, next) => {
       }
     }
 
-    const analytics = await getAnalytics(startDate, endDate);
+    const analytics = await getAnalytics(startDate, endDate, search);
     res.json(analytics);
   } catch (error) {
     next(error);

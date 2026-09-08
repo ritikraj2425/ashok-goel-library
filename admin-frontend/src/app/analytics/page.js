@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/lib/auth';
 import { getAnalytics, getAnalyticsBookings, getBookingDetail } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 function formatDuration(ms) {
   if (!ms) return '-';
@@ -25,7 +26,7 @@ const formatTimeSlot = (slotStr) => {
     const hour12 = hour % 12 || 12;
     return `${hour12}:${m} ${suffix}`;
   };
-  
+
   if (slotStr.includes('-')) {
     return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
   }
@@ -53,24 +54,34 @@ export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('daily');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const [statusBookings, setStatusBookings] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalStudentsInModal, setTotalStudentsInModal] = useState(0);
 
   const [detailBooking, setDetailBooking] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
 
-  const fetchBookings = async (status, p, query = searchQuery) => {
+  const fetchBookings = async (status, p, query = appliedSearch) => {
     setLoadingBookings(true);
     try {
-      const data = await getAnalyticsBookings({ period, status, page: p, search: query });
+      const params = { period, status, page: p, search: query };
+      if (period === 'custom' && startDate && endDate) {
+        params.startDate = new Date(startDate).toISOString();
+        params.endDate = new Date(endDate).toISOString();
+      }
+      const data = await getAnalyticsBookings(params);
       setStatusBookings(data.bookings || []);
       setTotalPages(data.totalPages || 1);
+      setTotalStudentsInModal(data.totalStudents || 0);
     } catch (e) {
       console.error(e);
       alert(e.message);
@@ -105,12 +116,20 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (!admin) return;
+    
+    const params = { period, search: appliedSearch };
+    if (period === 'custom') {
+      if (!startDate || !endDate) return;
+      params.startDate = new Date(startDate).toISOString();
+      params.endDate = new Date(endDate).toISOString();
+    }
+    
     setLoading(true);
-    getAnalytics({ period })
+    getAnalytics(params)
       .then(setAnalytics)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [admin, period]);
+  }, [admin, period, appliedSearch, startDate, endDate]);
 
   if (authLoading || loading) {
     return (
@@ -124,7 +143,6 @@ export default function AnalyticsPage() {
   if (!analytics) return null;
 
   const { counts, cabinUsage, popularSlots } = analytics;
-  const maxPeakCount = Math.max(...(popularSlots || []).map(h => h.count), 1);
 
   return (
     <div className="admin-layout">
@@ -134,34 +152,37 @@ export default function AnalyticsPage() {
         <p className="page-subtitle">Booking statistics and usage patterns.</p>
 
         <div className="filters" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
-          <div>
-            {['daily', 'weekly', 'monthly'].map((p) => (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {['daily', 'weekly', 'monthly', 'custom'].map((p) => (
               <button key={p} className={`filter-btn ${period === p ? 'active' : ''}`} onClick={() => setPeriod(p)}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
+            {period === 'custom' && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: '8px' }}>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>to</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input 
-              type="text" 
-              placeholder="Search by name or enrollment..." 
+            <input
+              type="text"
+              placeholder="Search by name or enrollment..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  setSelectedStatus('total');
-                  setPage(1);
-                  fetchBookings('total', 1, searchQuery);
+                  setAppliedSearch(searchQuery);
                 }
               }}
               style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--color-border)', width: '250px' }}
             />
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={() => {
-                setSelectedStatus('total');
-                setPage(1);
-                fetchBookings('total', 1, searchQuery);
+                setAppliedSearch(searchQuery);
               }}
             >
               Search
@@ -193,53 +214,52 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Cabin-wise Usage */}
-        {cabinUsage && cabinUsage.length > 0 && (
-          <div className="dashboard-section" style={{ marginTop: 'var(--space-2xl)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-xl)', marginTop: 'var(--space-2xl)' }}>
+          {/* Cabin-wise Usage Chart */}
+          <div className="dashboard-section">
             <h3 className="section-title">Cabin-wise Usage</h3>
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Cabin</th>
-                    <th>Bookings</th>
-                    <th>Total People</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cabinUsage.map((cu) => (
-                    <tr key={cu._id}>
-                      <td><strong>{cu.cabinName}</strong> <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-xs)' }}>({cu.cabinCode})</span></td>
-                      <td>{cu.bookingCount}</td>
-                      <td>{cu.totalPeople}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="card" style={{ height: '350px' }}>
+              {(!cabinUsage || cabinUsage.length === 0) ? (
+                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}><p className="text-muted">No usage data available.</p></div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-text-secondary)', marginBottom: '-20px', zIndex: 1, paddingRight: '10px', paddingTop: '10px' }}>
+                    Total Students: {cabinUsage.reduce((sum, cabin) => sum + (cabin.totalPeople || 0), 0)}
+                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={cabinUsage} dataKey="bookingCount" nameKey="cabinName" cx="50%" cy="50%" outerRadius={100} label>
+                        {cabinUsage.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'][index % 5]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Popular Slots */}
-        <div className="dashboard-section">
-          <h3 className="section-title">Popular Slots (Peak Hours)</h3>
-          <div className="card">
-            {(!popularSlots || popularSlots.length === 0) ? (
-              <p className="text-muted">No slots data available.</p>
-            ) : (
-              <div className="peak-chart" style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '10px 0' }}>
-                {popularSlots.map((s) => (
-                  <div key={s.slot} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '60px' }}>
-                    <div
-                      className="peak-bar"
-                      style={{ height: `${Math.max((s.count / maxPeakCount) * 100, 2)}px`, width: '40px', backgroundColor: 'var(--color-primary)', borderRadius: '4px' }}
-                      title={`${s.slot} - ${s.count} bookings`}
-                    />
-                    <span style={{ fontSize: '10px', marginTop: '4px', textAlign: 'center', color: 'var(--color-text-muted)' }}>{formatTimeSlot(s.slot)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Popular Slots Chart */}
+          <div className="dashboard-section">
+            <h3 className="section-title">Popular Slots (Peak Hours)</h3>
+            <div className="card" style={{ height: '350px' }}>
+              {(!popularSlots || popularSlots.length === 0) ? (
+                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}><p className="text-muted">No slots data available.</p></div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={popularSlots.map(s => ({ ...s, formattedSlot: formatTimeSlot(s.slot) }))} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="formattedSlot" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'var(--color-bg-secondary)' }} />
+                    <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} name="Bookings" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
           </div>
         </div>
 
@@ -247,8 +267,15 @@ export default function AnalyticsPage() {
         {selectedStatus && (
           <div className="modal-overlay" onClick={() => setSelectedStatus(null)}>
             <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px' }}>
-              <div className="modal-header">
-                <h2 style={{ textTransform: 'capitalize' }}>{selectedStatus.replace(/_/g, ' ')} Bookings</h2>
+              <div className="modal-header" style={{ alignItems: 'flex-start' }}>
+                <div>
+                  <h2 style={{ textTransform: 'capitalize', marginBottom: 'var(--space-xs)' }}>{selectedStatus.replace(/_/g, ' ')} Bookings</h2>
+                  {totalStudentsInModal > 0 && (
+                    <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                      Total Students: {totalStudentsInModal}
+                    </div>
+                  )}
+                </div>
                 <button className="btn btn-ghost" onClick={() => setSelectedStatus(null)}>Close</button>
               </div>
               <div className="modal-body">
