@@ -63,10 +63,12 @@ export default function AnalyticsPage() {
   const [detailBooking, setDetailBooking] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const fetchBookings = async (status, p) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchBookings = async (status, p, query = searchQuery) => {
     setLoadingBookings(true);
     try {
-      const data = await getAnalyticsBookings({ period, status, page: p });
+      const data = await getAnalyticsBookings({ period, status, page: p, search: query });
       setStatusBookings(data.bookings || []);
       setTotalPages(data.totalPages || 1);
     } catch (e) {
@@ -121,8 +123,7 @@ export default function AnalyticsPage() {
 
   if (!analytics) return null;
 
-  const { counts, cabinUsage, popularSlots, averageApprovalTimeMs, averageOccupancyDurationMs, mostUsedCabin } = analytics;
-
+  const { counts, cabinUsage, popularSlots } = analytics;
   const maxPeakCount = Math.max(...(popularSlots || []).map(h => h.count), 1);
 
   return (
@@ -132,78 +133,69 @@ export default function AnalyticsPage() {
         <h1 className="page-title">Analytics</h1>
         <p className="page-subtitle">Booking statistics and usage patterns.</p>
 
-        <div className="filters">
-          {['daily', 'weekly', 'monthly'].map((p) => (
-            <button key={p} className={`filter-btn ${period === p ? 'active' : ''}`} onClick={() => setPeriod(p)}>
-              {p.charAt(0).toUpperCase() + p.slice(1)}
+        <div className="filters" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+          <div>
+            {['daily', 'weekly', 'monthly'].map((p) => (
+              <button key={p} className={`filter-btn ${period === p ? 'active' : ''}`} onClick={() => setPeriod(p)}>
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input 
+              type="text" 
+              placeholder="Search by name or enrollment..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setSelectedStatus('total');
+                  setPage(1);
+                  fetchBookings('total', 1, searchQuery);
+                }
+              }}
+              style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--color-border)', width: '250px' }}
+            />
+            <button 
+              className="btn btn-primary" 
+              onClick={() => {
+                setSelectedStatus('total');
+                setPage(1);
+                fetchBookings('total', 1, searchQuery);
+              }}
+            >
+              Search
             </button>
-          ))}
+          </div>
         </div>
 
         {/* Stat Cards */}
         <div className="stats-grid">
           <div className="card stat-card" style={{ cursor: counts.total > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('total', counts.total)}>
             <div className="stat-value">{counts.total}</div>
-            <div className="stat-label">Total Requests</div>
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.approved + counts.completed > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('approved', counts.approved + counts.completed)}>
-            <div className="stat-value" style={{ color: 'var(--color-status-available)' }}>{counts.approved + counts.completed}</div>
-            <div className="stat-label">Approved</div>
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('rejected', counts.rejected)}>
-            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.rejected}</div>
-            <div className="stat-label">Rejected</div>
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.auto_rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('auto_rejected', counts.auto_rejected)}>
-            <div className="stat-value" style={{ color: 'var(--color-warning)' }}>{counts.auto_rejected}</div>
-            <div className="stat-label">Auto-Rejected</div>
+            <div className="stat-label">Total Bookings</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.cancelled_by_student > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_student', counts.cancelled_by_student)}>
             <div className="stat-value">{counts.cancelled_by_student}</div>
-            <div className="stat-label">Student Cancelled</div>
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.cancelled_by_admin > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_admin', counts.cancelled_by_admin)}>
-            <div className="stat-value">{counts.cancelled_by_admin}</div>
-            <div className="stat-label">Admin Checkout</div>
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.completed > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('completed', counts.completed)}>
-            <div className="stat-value">{counts.completed}</div>
-            <div className="stat-label">Completed</div>
-          </div>
-
-          <div className="card stat-card" style={{ cursor: counts.awaiting_checkin > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('awaiting_checkin', counts.awaiting_checkin)}>
-            <div className="stat-value" style={{ color: 'var(--color-warning)' }}>{counts.awaiting_checkin}</div>
-            <div className="stat-label">Missed Check-ins</div>
+            <div className="stat-label">User Cancelled</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.no_show > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('no_show', counts.no_show)}>
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.no_show}</div>
-            <div className="stat-label">No Shows</div>
+            <div className="stat-label">Check In Delay</div>
           </div>
-          <div className="card stat-card" style={{ cursor: counts.pending > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('pending', counts.pending)}>
-            <div className="stat-value">{counts.pending}</div>
-            <div className="stat-label">Currently Pending</div>
+          <div className="card stat-card" style={{ cursor: counts.completed > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('completed', counts.completed)}>
+            <div className="stat-value" style={{ color: 'var(--color-status-available)' }}>{counts.completed}</div>
+            <div className="stat-label">Completed Session</div>
           </div>
-        </div>
-
-        {/* Key Metrics */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 'var(--space-lg)', marginBottom: 'var(--space-2xl)' }}>
-          <div className="card">
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-sm)' }}>Average Approval Time</div>
-            <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600 }}>{formatDuration(averageApprovalTimeMs)}</div>
-          </div>
-          <div className="card">
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-sm)' }}>Avg Occupancy Duration</div>
-            <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600 }}>{formatDuration(averageOccupancyDurationMs)}</div>
-          </div>
-          <div className="card">
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-sm)' }}>Most Used Cabin</div>
-            <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 600 }}>{mostUsedCabin ? `${mostUsedCabin.cabinName} (${mostUsedCabin.bookingCount})` : '-'}</div>
+          <div className="card stat-card" style={{ cursor: counts.cancelled_by_admin > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_admin', counts.cancelled_by_admin)}>
+            <div className="stat-value">{counts.cancelled_by_admin}</div>
+            <div className="stat-label">Early Checkout</div>
           </div>
         </div>
 
         {/* Cabin-wise Usage */}
-        {cabinUsage.length > 0 && (
-          <div className="dashboard-section">
+        {cabinUsage && cabinUsage.length > 0 && (
+          <div className="dashboard-section" style={{ marginTop: 'var(--space-2xl)' }}>
             <h3 className="section-title">Cabin-wise Usage</h3>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <table className="data-table">
@@ -230,7 +222,7 @@ export default function AnalyticsPage() {
 
         {/* Popular Slots */}
         <div className="dashboard-section">
-          <h3 className="section-title">Popular Slots</h3>
+          <h3 className="section-title">Popular Slots (Peak Hours)</h3>
           <div className="card">
             {(!popularSlots || popularSlots.length === 0) ? (
               <p className="text-muted">No slots data available.</p>

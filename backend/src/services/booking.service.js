@@ -343,6 +343,21 @@ async function cancelApprovedByStudent(bookingId, userId) {
         blockedUntil: null, // Permanent block
       },
     });
+
+    await Booking.updateMany(
+      {
+        studentUserId: userId,
+        startTime: { $gt: now },
+        status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.APPROVED, BOOKING_STATUS.AWAITING_CHECKIN] }
+      },
+      {
+        $set: {
+          status: BOOKING_STATUS.CANCELLED_BY_ADMIN,
+          cancelledAt: now,
+          cancellationReason: 'Auto-cancelled due to permanent block (excessive cancellations)'
+        }
+      }
+    );
   }
 
   return booking;

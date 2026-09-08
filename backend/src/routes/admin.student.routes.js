@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const authAdmin = require('../middleware/authAdmin');
 const User = require('../models/User');
+const Booking = require('../models/Booking');
+const { BOOKING_STATUS } = require('../utils/constants');
 
 router.use(authAdmin);
 
@@ -91,6 +93,22 @@ router.post('/block', async (req, res, next) => {
       err.statusCode = 404;
       throw err;
     }
+
+    const now = new Date();
+    await Booking.updateMany(
+      {
+        studentUserId: student._id,
+        startTime: { $gt: now },
+        status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.APPROVED, BOOKING_STATUS.AWAITING_CHECKIN] }
+      },
+      {
+        $set: {
+          status: BOOKING_STATUS.CANCELLED_BY_ADMIN,
+          cancelledAt: now,
+          cancellationReason: 'Auto-cancelled due to permanent block'
+        }
+      }
+    );
 
     res.json({ message: 'Student successfully permanently blocked', student });
   } catch (error) {

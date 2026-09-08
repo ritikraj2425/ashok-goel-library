@@ -75,6 +75,22 @@ async function runCleanup() {
         }
       );
 
+      // Auto-cancel all future active bookings for blocked students
+      await Booking.updateMany(
+        {
+          studentUserId: { $in: studentIds },
+          startTime: { $gt: now },
+          status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.APPROVED, BOOKING_STATUS.AWAITING_CHECKIN] }
+        },
+        {
+          $set: {
+            status: BOOKING_STATUS.CANCELLED_BY_ADMIN,
+            cancelledAt: now,
+            cancellationReason: 'Auto-cancelled due to temporary block (missed check-in)'
+          }
+        }
+      );
+
       console.log(
         `Cleanup: ${noShowBookings.length} no-show(s), ${studentIds.length} student(s) blocked until ${blockUntil.toISOString()}`
       );

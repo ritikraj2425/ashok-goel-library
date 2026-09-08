@@ -156,7 +156,7 @@ async function getAnalytics(startDate, endDate) {
 /**
  * Get detailed bookings for a specific status and date range.
  */
-async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20) {
+async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20, search = '') {
   await runCleanup();
 
   const start = new Date(startDate);
@@ -169,6 +169,15 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   
   if (status && status !== 'total') {
     filter.status = status;
+  }
+
+  if (search) {
+    filter.$or = [
+      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.enrollmentNumber': search },
+      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.enrollmentNumber': search }
+    ];
   }
 
   const skip = (page - 1) * limit;

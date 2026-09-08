@@ -43,7 +43,7 @@ router.get('/', authAdmin, async (req, res, next) => {
  */
 router.get('/bookings', authAdmin, async (req, res, next) => {
   try {
-    let { startDate, endDate, period, status, page, limit } = req.query;
+    let { startDate, endDate, period, status, page, limit, search } = req.query;
     const now = new Date();
 
     if (!startDate || !endDate) {
@@ -63,7 +63,7 @@ router.get('/bookings', authAdmin, async (req, res, next) => {
     const limitNum = parseInt(limit) || 20;
 
     const { getAnalyticsBookings } = require('../services/analytics.service');
-    const result = await getAnalyticsBookings(startDate, endDate, status, pageNum, limitNum);
+    const result = await getAnalyticsBookings(startDate, endDate, status, pageNum, limitNum, search);
     res.json(result);
   } catch (error) {
     next(error);
