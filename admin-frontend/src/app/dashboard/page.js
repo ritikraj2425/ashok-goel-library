@@ -130,6 +130,22 @@ export default function AdminDashboardPage() {
     });
   };
 
+  const handleCheckout = (id) => {
+    setConfirm({
+      title: 'Early Checkout',
+      message: 'Are you sure you want to check out this student early?',
+      confirmLabel: 'Checkout',
+      confirmClass: 'btn-danger',
+      showReason: true,
+      onConfirm: async (reason) => {
+        await cancelBooking(id, reason);
+        setConfirm(null);
+        showSuccess('Student checked out early');
+        fetchData();
+      },
+    });
+  };
+
   const handleViewDetail = async (id) => {
     setDetailBooking({ loading: true, _id: id });
     try {
@@ -177,6 +193,7 @@ export default function AdminDashboardPage() {
                     <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
                     <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
                     <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
                     <div className="booking-card-detail"><span className="label">People</span>{booking.peopleCount}</div>
@@ -229,6 +246,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Deadline</span>
@@ -259,6 +277,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Ends in</span>
@@ -266,7 +285,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleCancelByAdmin(booking._id)}>Checkout</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleCheckout(booking._id)}>Checkout</button>
                   </div>
                 </div>
               ))}
@@ -289,6 +308,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
 
                   </div>
@@ -367,9 +387,9 @@ export default function AdminDashboardPage() {
                       <strong>Status:</strong>
                       <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`} style={{ marginLeft: 'var(--space-xs)' }}>
                         {detailBooking.status === 'no_show' ? 'Missed Check-in' :
-                          detailBooking.status === 'cancelled_by_admin' ? 'Early Checkout' :
-                            detailBooking.status === 'cancelled_by_student' ? 'User Cancelled' :
-                              detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          detailBooking.status === 'early_checkout' ? 'Early Checkout' :
+                          detailBooking.status === 'cancelled_by_admin' ? 'Admin Cancelled' :
+                          detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </span>
                     </div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent.name}</div>

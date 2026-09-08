@@ -62,7 +62,8 @@ async function getAnalytics(startDate, endDate, search = '') {
             BOOKING_STATUS.COMPLETED,
             BOOKING_STATUS.AWAITING_CHECKIN,
             BOOKING_STATUS.CHECKED_IN,
-            BOOKING_STATUS.CANCELLED_BY_ADMIN
+            BOOKING_STATUS.CANCELLED_BY_ADMIN,
+            BOOKING_STATUS.EARLY_CHECKOUT
           ] 
         },
       },
@@ -99,7 +100,8 @@ async function getAnalytics(startDate, endDate, search = '') {
             BOOKING_STATUS.COMPLETED,
             BOOKING_STATUS.AWAITING_CHECKIN,
             BOOKING_STATUS.CHECKED_IN,
-            BOOKING_STATUS.CANCELLED_BY_ADMIN
+            BOOKING_STATUS.CANCELLED_BY_ADMIN,
+            BOOKING_STATUS.EARLY_CHECKOUT
           ] 
         },
       },

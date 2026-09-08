@@ -12,6 +12,7 @@ const BOOKING_STATUS = {
   AUTO_REJECTED: 'auto_rejected',
   CANCELLED_BY_STUDENT: 'cancelled_by_student',
   CANCELLED_BY_ADMIN: 'cancelled_by_admin',
+  EARLY_CHECKOUT: 'early_checkout',
   COMPLETED: 'completed',
   NO_SHOW: 'no_show',
 };

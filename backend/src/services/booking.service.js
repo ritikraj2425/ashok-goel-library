@@ -530,14 +530,22 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
 
   const now = new Date();
 
+  const bookingToCancel = await Booking.findOne({ _id: bookingId, status: { $in: ACTIVE_STATUSES } });
+  if (!bookingToCancel) {
+    const existing = await Booking.findById(bookingId);
+    if (!existing) throw createError('Booking not found', 404);
+    throw createError(`Cannot cancel booking with status: ${existing.status}`);
+  }
+
+  const newStatus = bookingToCancel.status === BOOKING_STATUS.CHECKED_IN 
+    ? BOOKING_STATUS.EARLY_CHECKOUT 
+    : BOOKING_STATUS.CANCELLED_BY_ADMIN;
+
   const booking = await Booking.findOneAndUpdate(
-    {
-      _id: bookingId,
-      status: { $in: ACTIVE_STATUSES },
-    },
+    { _id: bookingId },
     {
       $set: {
-        status: BOOKING_STATUS.CANCELLED_BY_ADMIN,
+        status: newStatus,
         cancelledAt: now,
         cancelledBy: adminId,
         ...(reason && { cancellationReason: reason }),
@@ -545,12 +553,6 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
     },
     { new: true }
   );
-
-  if (!booking) {
-    const existing = await Booking.findById(bookingId);
-    if (!existing) throw createError('Booking not found', 404);
-    throw createError(`Cannot cancel booking with status: ${existing.status}`);
-  }
 
   return booking;
 }

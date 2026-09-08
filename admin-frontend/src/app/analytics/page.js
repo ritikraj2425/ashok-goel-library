@@ -43,7 +43,8 @@ const statusMap = {
   rejected: { label: 'Rejected', className: 'badge-rejected' },
   auto_rejected: { label: 'Auto-Rejected', className: 'badge-rejected' },
   cancelled_by_student: { label: 'User Cancelled', className: 'badge-inactive' },
-  cancelled_by_admin: { label: 'Early Checkout', className: 'badge-inactive' },
+  cancelled_by_admin: { label: 'Admin Cancelled', className: 'badge-inactive' },
+  early_checkout: { label: 'Early Checkout', className: 'badge-inactive' },
   completed: { label: 'Completed', className: 'badge-completed' },
 };
 
@@ -193,24 +194,32 @@ export default function AnalyticsPage() {
         {/* Stat Cards */}
         <div className="stats-grid">
           <div className="card stat-card" style={{ cursor: counts.total > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('total', counts.total)}>
-            <div className="stat-value">{counts.total}</div>
+            <div className="stat-value">{counts.total || 0}</div>
             <div className="stat-label">Total Bookings</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.cancelled_by_student > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_student', counts.cancelled_by_student)}>
-            <div className="stat-value">{counts.cancelled_by_student}</div>
+            <div className="stat-value">{counts.cancelled_by_student || 0}</div>
             <div className="stat-label">User Cancelled</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.no_show > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('no_show', counts.no_show)}>
-            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.no_show}</div>
+            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.no_show || 0}</div>
             <div className="stat-label">Check In Delay</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.completed > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('completed', counts.completed)}>
-            <div className="stat-value" style={{ color: 'var(--color-status-available)' }}>{counts.completed}</div>
+            <div className="stat-value" style={{ color: 'var(--color-status-available)' }}>{counts.completed || 0}</div>
             <div className="stat-label">Completed Session</div>
           </div>
           <div className="card stat-card" style={{ cursor: counts.cancelled_by_admin > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_admin', counts.cancelled_by_admin)}>
-            <div className="stat-value">{counts.cancelled_by_admin}</div>
+            <div className="stat-value">{counts.cancelled_by_admin || 0}</div>
+            <div className="stat-label">Admin Cancelled</div>
+          </div>
+          <div className="card stat-card" style={{ cursor: counts.early_checkout > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('early_checkout', counts.early_checkout)}>
+            <div className="stat-value">{counts.early_checkout || 0}</div>
             <div className="stat-label">Early Checkout</div>
+          </div>
+          <div className="card stat-card" style={{ cursor: counts.rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('rejected', counts.rejected)}>
+            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.rejected || 0}</div>
+            <div className="stat-label">Admin Rejected</div>
           </div>
         </div>
 
@@ -223,17 +232,38 @@ export default function AnalyticsPage() {
                 <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}><p className="text-muted">No usage data available.</p></div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-text-secondary)', marginBottom: '-20px', zIndex: 1, paddingRight: '10px', paddingTop: '10px' }}>
-                    Total Students: {cabinUsage.reduce((sum, cabin) => sum + (cabin.totalPeople || 0), 0)}
+                  <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-text-secondary)', marginBottom: '-20px', zIndex: 1, paddingRight: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+                    <span>Total Bookings: {cabinUsage.reduce((sum, cabin) => sum + (cabin.bookingCount || 0), 0)}</span>
+                    <span>Total Students: {cabinUsage.reduce((sum, cabin) => sum + (cabin.totalPeople || 0), 0)}</span>
                   </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={cabinUsage} dataKey="bookingCount" nameKey="cabinName" cx="50%" cy="50%" outerRadius={100} label>
+                      <Pie 
+                        data={cabinUsage} 
+                        dataKey="bookingCount" 
+                        nameKey="cabinName" 
+                        cx="50%" cy="50%" outerRadius={100} 
+                        label={({ cabinName, bookingCount, totalPeople }) => `${cabinName}: ${bookingCount} B / ${totalPeople} S`}
+                      >
                         {cabinUsage.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'][index % 5]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip 
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div style={{ backgroundColor: 'var(--color-bg-primary)', padding: 'var(--space-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)' }}>
+                                <p style={{ fontWeight: 'bold', margin: '0 0 var(--space-xs) 0', color: 'var(--color-text-primary)' }}>{data.cabinName}</p>
+                                <p style={{ margin: '0', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>Bookings: <strong>{data.bookingCount}</strong></p>
+                                <p style={{ margin: '0', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>Students: <strong>{data.totalPeople}</strong></p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }} 
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -292,6 +322,7 @@ export default function AnalyticsPage() {
                           <th>Email</th>
                           <th>Phone</th>
                           <th>Status</th>
+                          <th>Reason</th>
                           <th>Resolution Time</th>
                         </tr>
                       </thead>
@@ -307,6 +338,9 @@ export default function AnalyticsPage() {
                               <span className={`badge ${statusMap[b.status]?.className || 'badge-default'}`}>
                                 {statusMap[b.status]?.label || b.status.replace(/_/g, ' ')}
                               </span>
+                            </td>
+                            <td style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {b.rejectionReason || b.cancellationReason || '-'}
                             </td>
                             <td>
                               {b.status === 'completed' && b.expiresAt ? (
