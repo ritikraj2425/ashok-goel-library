@@ -193,7 +193,7 @@ export default function AdminDashboardPage() {
                     <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
+                    <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
                     <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
                     <div className="booking-card-detail"><span className="label">People</span>{booking.peopleCount}</div>
@@ -246,7 +246,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
+                    <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Deadline</span>
@@ -277,7 +277,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
+                    <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Ends in</span>
@@ -308,7 +308,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
-                    <div className="booking-card-detail"><span className="label">Email</span>{booking.studentUserId?.email || '-'}</div>
+                    <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
 
                   </div>
