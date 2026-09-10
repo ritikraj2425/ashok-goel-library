@@ -221,6 +221,10 @@ export default function AnalyticsPage() {
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.rejected || 0}</div>
             <div className="stat-label">Admin Rejected</div>
           </div>
+          <div className="card stat-card" style={{ cursor: counts.auto_rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('auto_rejected', counts.auto_rejected)}>
+            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.auto_rejected || 0}</div>
+            <div className="stat-label">Auto-Rejected</div>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-xl)', marginTop: 'var(--space-2xl)' }}>

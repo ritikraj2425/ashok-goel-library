@@ -99,26 +99,34 @@ async function createBookingRequest(userId, body) {
   // --- Collect all enrollment numbers for duplicate checks ---
   const allEnrollments = [mainEnrollment, ...normalizedGroupMembers.map((m) => m.enrollmentNumber)];
 
-  // --- Rule 11: Max 2 bookings per day per enrollment ---
+  // --- Rule 11: Max 2 bookings per day per enrollment or account ---
   const todaysBookings = await Booking.find({
     bookingDate: slotDetails.dateString,
     status: {
       $in: [
         BOOKING_STATUS.PENDING,
         BOOKING_STATUS.APPROVED,
+        BOOKING_STATUS.CANCEL_REQUESTED,
         BOOKING_STATUS.AWAITING_CHECKIN,
         BOOKING_STATUS.CHECKED_IN,
         BOOKING_STATUS.COMPLETED,
+        BOOKING_STATUS.EARLY_CHECKOUT,
       ],
     },
     $or: [
+      { studentUserId: userId },
       { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
       { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
     ],
-  }).select('mainStudent groupMembers').lean();
+  }).select('studentUserId mainStudent groupMembers').lean();
 
   const enrollmentCounts = {};
+  let userBookingsCount = 0;
+  
   for (const b of todaysBookings) {
+    if (b.studentUserId && b.studentUserId.toString() === userId.toString()) {
+      userBookingsCount++;
+    }
     if (b.mainStudent?.enrollmentNumber) {
       enrollmentCounts[b.mainStudent.enrollmentNumber] = (enrollmentCounts[b.mainStudent.enrollmentNumber] || 0) + 1;
     }
@@ -127,6 +135,10 @@ async function createBookingRequest(userId, body) {
         enrollmentCounts[member.enrollmentNumber] = (enrollmentCounts[member.enrollmentNumber] || 0) + 1;
       }
     }
+  }
+
+  if (userBookingsCount >= 2) {
+    throw createError('Your account has already booked 2 slots for this day. More than 2 slots of cabin are not allowed for a user in a day.');
   }
 
   for (const enrollment of allEnrollments) {
@@ -405,6 +417,15 @@ async function approveBooking(bookingId, adminId) {
 
   const existing = await Booking.findById(bookingId);
   if (!existing) throw createError('Booking not found', 404);
+
+  // If the check-in deadline has already passed, auto-reject it instead of approving.
+  if (now > existing.checkInDeadlineAt) {
+    existing.status = BOOKING_STATUS.AUTO_REJECTED;
+    existing.rejectedAt = now;
+    existing.rejectionReason = 'Slot check-in deadline had already elapsed before approval.';
+    await existing.save();
+    throw createError('Cannot approve booking: the time slot or check-in window has already elapsed. Booking has been auto-rejected.');
+  }
 
   // Atomic update: only if pending AND deadline not passed
   const booking = await Booking.findOneAndUpdate(

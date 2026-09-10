@@ -108,20 +108,18 @@ export default function DashboardPage() {
         <h2 className="page-title">Study Cabins</h2>
         <p className="page-subtitle">View availability and book a cabin for your study group.</p>
 
-        {user?.isBlocked && (
+        {user?.isBlocked ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
             <strong>Account Blocked:</strong> Your account has been permanently blocked from booking cabins. Contact administration for more information.
           </div>
-        )}
-
-        {user?.blockedUntil && new Date(user.blockedUntil) > new Date() && !user?.isBlocked && (
+        ) : user?.blockedUntil && new Date(user.blockedUntil) > new Date() ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
             <strong>Account Temporarily Blocked:</strong> Due to a missed check-in, you are blocked from booking cabins until {new Date(user.blockedUntil).toLocaleString()}.
           </div>
-        )}
+        ) : null}
 
         {successMessage && <div className="alert alert-success">{successMessage}</div>}
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && !error.includes('blocked') && <div className="alert alert-error">{error}</div>}
 
         {activeBookings.length > 0 && activeBookings.map(booking => (
           <ActiveBookingBanner
