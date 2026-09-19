@@ -28,7 +28,7 @@ async function getAnalytics(startDate, endDate, search = '') {
   // --- Status counts ---
   const statusCounts = await Booking.aggregate([
     { $match: filter },
-    { $group: { _id: '$status', count: { $sum: 1 } } },
+    { $group: { _id: '$status', count: { $sum: 1 }, studentCount: { $sum: '$peopleCount' } } },
   ]);
 
   const counts = {
@@ -44,11 +44,16 @@ async function getAnalytics(startDate, endDate, search = '') {
     awaiting_checkin: 0,
     checked_in: 0,
     no_show: 0,
+    early_checkout: 0,
   };
+
+  const studentCounts = { ...counts };
 
   for (const item of statusCounts) {
     counts[item._id] = item.count;
     counts.total += item.count;
+    studentCounts[item._id] = item.studentCount || 0;
+    studentCounts.total += item.studentCount || 0;
   }
 
   // --- Cabin-wise usage (only approved + completed bookings count as usage) ---
@@ -171,6 +176,7 @@ async function getAnalytics(startDate, endDate, search = '') {
   return {
     dateRange: { start: start.toISOString(), end: end.toISOString() },
     counts,
+    studentCounts,
     cabinUsage,
     peakHours: popularSlots, // rename in frontend later, or keep key as peakHours to avoid massive renaming
     popularSlots,
@@ -233,5 +239,110 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
     totalStudents,
   };
 }
+/**
+ * Generate CSV string for analytics download with selectable columns.
+ */
+async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses = [], search = '') {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
 
-module.exports = { getAnalytics, getAnalyticsBookings };
+  const filter = { requestedAt: { $gte: start, $lte: end } };
+  if (statuses && statuses.length > 0 && !statuses.includes('total')) {
+    filter.status = { $in: statuses };
+  }
+  if (search) {
+    filter.$or = [
+      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.enrollmentNumber': search },
+      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.enrollmentNumber': search },
+    ];
+  }
+
+  const bookings = await Booking.find(filter)
+    .populate('studentUserId', 'name email')
+    .populate('cabinId', 'name code')
+    .sort({ requestedAt: -1 })
+    .lean();
+
+  // All possible columns and their extractors
+  const COLUMN_MAP = {
+    date: { header: 'Date', extract: (b) => b.bookingDate || '' },
+    slot: { header: 'Time Slot', extract: (b) => b.timeSlotId || '' },
+    cabin: { header: 'Cabin', extract: (b) => b.cabinId?.name || '' },
+    cabin_code: { header: 'Cabin Code', extract: (b) => b.cabinId?.code || '' },
+    student_name: { header: 'Student Name', extract: (b) => b.mainStudent?.name || '' },
+    enrollment: { header: 'Enrollment No.', extract: (b) => b.mainStudent?.enrollmentNumber || '' },
+    phone: { header: 'Phone', extract: (b) => b.mainStudent?.phoneNumber || '' },
+    email: { header: 'Email', extract: (b) => b.studentUserId?.email || '' },
+    people_count: { header: 'People Count', extract: (b) => b.peopleCount || '' },
+    group_members: {
+      header: 'Group Members',
+      extract: (b) =>
+        (b.groupMembers || []).map((m) => `${m.name} (${m.enrollmentNumber})`).join('; '),
+    },
+    status: {
+      header: 'Status',
+      extract: (b) =>
+        (b.status || '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+    },
+    requested_at: { header: 'Requested At', extract: (b) => b.requestedAt ? new Date(b.requestedAt).toLocaleString() : '' },
+    approved_at: { header: 'Approved At', extract: (b) => b.approvedAt ? new Date(b.approvedAt).toLocaleString() : '' },
+    checked_in_at: { header: 'Checked In At', extract: (b) => b.checkedInAt ? new Date(b.checkedInAt).toLocaleString() : '' },
+    completed_at: { header: 'Completed At', extract: (b) => b.completedAt ? new Date(b.completedAt).toLocaleString() : '' },
+    cancellation_reason: { header: 'Cancellation Reason', extract: (b) => b.cancellationReason || b.rejectionReason || '' },
+  };
+
+  // If no columns specified, use a sensible default set
+  const selectedColumns = columns && columns.length > 0
+    ? columns.filter((c) => COLUMN_MAP[c])
+    : ['date', 'slot', 'cabin', 'student_name', 'enrollment', 'phone', 'status'];
+
+  // Build CSV
+  const escapeCSV = (val) => {
+    const str = String(val);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const headerRow = selectedColumns.map((c) => escapeCSV(COLUMN_MAP[c].header)).join(',');
+  const dataRows = bookings.map((b) =>
+    selectedColumns.map((c) => escapeCSV(COLUMN_MAP[c].extract(b))).join(',')
+  );
+
+  // Compute summary statistics
+  const summaryCounts = {};
+  const summaryStudents = {};
+  let totalBookings = 0;
+  let totalStudents = 0;
+
+  for (const b of bookings) {
+    const s = b.status || 'unknown';
+    summaryCounts[s] = (summaryCounts[s] || 0) + 1;
+    summaryStudents[s] = (summaryStudents[s] || 0) + (b.peopleCount || 0);
+    totalBookings++;
+    totalStudents += (b.peopleCount || 0);
+  }
+
+  const formatStatus = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  const summaryLines = [
+    '--- SUMMARY STATISTICS ---',
+    `Total Bookings,${totalBookings}`,
+    `Total Students,${totalStudents}`,
+    '',
+    'Breakdown by Status:',
+    'Status,Bookings,Students',
+    ...Object.keys(summaryCounts).map(s => `${escapeCSV(formatStatus(s))},${summaryCounts[s]},${summaryStudents[s]}`),
+    '',
+    '--- DETAILED DATA ---'
+  ];
+
+  return [...summaryLines, headerRow, ...dataRows].join('\n');
+}
+
+module.exports = { getAnalytics, getAnalyticsBookings, generateAnalyticsCSV };

@@ -146,6 +146,17 @@ export async function deleteCabin(id) {
   return apiRequest(`/api/admin/cabins/${id}`, { method: 'DELETE' });
 }
 
+export async function getCabinStatusForAdmin() {
+  return apiRequest('/api/admin/cabins/status');
+}
+
+export async function createAdminBooking(data) {
+  return apiRequest('/api/admin/bookings/admin-book', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // --- Admin Users ---
 export async function getAdminUsers(page = 1, limit = 20) {
   return apiRequest(`/api/admin/users?page=${page}&limit=${limit}`);
@@ -191,6 +202,58 @@ export async function blockStudent(email) {
 
 export async function searchStudents(query) {
   return apiRequest(`/api/admin/students/search?q=${encodeURIComponent(query)}`);
+}
+
+// --- System Settings ---
+export async function getSystemSettings() {
+  return apiRequest('/api/admin/settings');
+}
+
+export async function updateWeeklySchedule(weeklySchedule) {
+  return apiRequest('/api/admin/settings/schedule', {
+    method: 'PUT',
+    body: JSON.stringify({ weeklySchedule }),
+  });
+}
+
+export async function addException(data) {
+  return apiRequest('/api/admin/settings/exceptions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeException(id) {
+  return apiRequest(`/api/admin/settings/exceptions/${id}`, { method: 'DELETE' });
+}
+
+// --- Analytics CSV Download ---
+export async function downloadAnalyticsCSV(params = {}) {
+  const token = getToken();
+  const response = await fetch(`${API_URL}/api/admin/analytics/download-csv`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to download CSV');
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `analytics_report_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
 }
 
 export { getToken, removeToken };

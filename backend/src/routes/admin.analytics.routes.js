@@ -70,4 +70,37 @@ router.get('/bookings', authAdmin, async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/admin/analytics/download-csv
+ * Download analytics bookings as a CSV file with selectable columns.
+ * Body: { columns: [...], period, startDate, endDate, status, search }
+ */
+router.post('/download-csv', authAdmin, async (req, res, next) => {
+  try {
+    const { generateAnalyticsCSV } = require('../services/analytics.service');
+    let { columns, period, startDate, endDate, statuses, search } = req.body;
+
+    const now = new Date();
+    if (!startDate || !endDate) {
+      if (period === 'weekly') {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        endDate = now.toISOString();
+      } else if (period === 'monthly') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        endDate = now.toISOString();
+      } else {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        endDate = now.toISOString();
+      }
+    }
+
+    const csv = await generateAnalyticsCSV(startDate, endDate, columns, statuses, search);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="analytics_report_${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/lib/auth';
-import { getAnalytics, getAnalyticsBookings, getBookingDetail } from '@/lib/api';
+import { getAnalytics, getAnalyticsBookings, getBookingDetail, downloadAnalyticsCSV } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -70,6 +70,48 @@ export default function AnalyticsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadColumns, setDownloadColumns] = useState({
+    date: true, slot: true, cabin: true, student_name: true, enrollment: true,
+    phone: true, email: false, people_count: false, group_members: false,
+    status: true, requested_at: false, approved_at: false, checked_in_at: false,
+    completed_at: false, cancellation_reason: false,
+  });
+  const [downloadStatuses, setDownloadStatuses] = useState([]);
+
+  const COLUMN_LABELS = {
+    date: 'Date', slot: 'Time Slot', cabin: 'Cabin', student_name: 'Student Name',
+    enrollment: 'Enrollment No.', phone: 'Phone', email: 'Email',
+    people_count: 'People Count', group_members: 'Group Members', status: 'Status',
+    requested_at: 'Requested At', approved_at: 'Approved At',
+    checked_in_at: 'Checked In At', completed_at: 'Completed At',
+    cancellation_reason: 'Cancellation Reason',
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const selectedCols = Object.entries(downloadColumns).filter(([, v]) => v).map(([k]) => k);
+      if (selectedCols.length === 0) { alert('Please select at least one column.'); setDownloading(false); return; }
+
+      const params = { columns: selectedCols, period, search: appliedSearch };
+      if (downloadStatuses.length > 0) {
+        params.statuses = downloadStatuses;
+      }
+      if (period === 'custom' && startDate && endDate) {
+        params.startDate = new Date(startDate).toISOString();
+        params.endDate = new Date(endDate).toISOString();
+      }
+      await downloadAnalyticsCSV(params);
+      setShowDownloadModal(false);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const fetchBookings = async (status, p, query = appliedSearch) => {
     setLoadingBookings(true);
@@ -143,14 +185,33 @@ export default function AnalyticsPage() {
 
   if (!analytics) return null;
 
-  const { counts, cabinUsage, popularSlots } = analytics;
+  const { counts, cabinUsage, popularSlots, studentCounts = {} } = analytics;
+
+  const mockBooking = {
+    bookingDate: new Date().toISOString().split('T')[0],
+    timeSlotId: '09:30-10:30',
+    cabinId: { name: 'Demo Cabin' },
+    mainStudent: { name: 'John Doe', enrollmentNumber: '123456', phoneNumber: '9876543210' },
+    studentUserId: { email: 'john.doe@example.com' },
+    peopleCount: 3,
+    groupMembers: [{ name: 'Jane Doe' }, { name: 'Jim Doe' }],
+    status: 'completed',
+    requestedAt: new Date().toISOString()
+  };
 
   return (
     <div className="admin-layout">
       <Sidebar />
       <main className="admin-content">
-        <h1 className="page-title">Analytics</h1>
-        <p className="page-subtitle">Booking statistics and usage patterns.</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 className="page-title">Analytics</h1>
+            <p className="page-subtitle">Booking statistics and usage patterns.</p>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowDownloadModal(true)}>
+            Download CSV
+          </button>
+        </div>
 
         <div className="filters" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -196,34 +257,42 @@ export default function AnalyticsPage() {
           <div className="card stat-card" style={{ cursor: counts.total > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('total', counts.total)}>
             <div className="stat-value">{counts.total || 0}</div>
             <div className="stat-label">Total Bookings</div>
+            {studentCounts.total > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.total} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.cancelled_by_student > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_student', counts.cancelled_by_student)}>
             <div className="stat-value">{counts.cancelled_by_student || 0}</div>
             <div className="stat-label">User Cancelled</div>
+            {studentCounts.cancelled_by_student > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.cancelled_by_student} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.no_show > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('no_show', counts.no_show)}>
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.no_show || 0}</div>
             <div className="stat-label">Check In Delay</div>
+            {studentCounts.no_show > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.no_show} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.completed > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('completed', counts.completed)}>
             <div className="stat-value" style={{ color: 'var(--color-status-available)' }}>{counts.completed || 0}</div>
             <div className="stat-label">Completed Session</div>
+            {studentCounts.completed > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.completed} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.cancelled_by_admin > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('cancelled_by_admin', counts.cancelled_by_admin)}>
             <div className="stat-value">{counts.cancelled_by_admin || 0}</div>
             <div className="stat-label">Admin Cancelled</div>
+            {studentCounts.cancelled_by_admin > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.cancelled_by_admin} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.early_checkout > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('early_checkout', counts.early_checkout)}>
             <div className="stat-value">{counts.early_checkout || 0}</div>
             <div className="stat-label">Early Checkout</div>
+            {studentCounts.early_checkout > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.early_checkout} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('rejected', counts.rejected)}>
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.rejected || 0}</div>
             <div className="stat-label">Admin Rejected</div>
+            {studentCounts.rejected > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.rejected} Students</div>}
           </div>
           <div className="card stat-card" style={{ cursor: counts.auto_rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('auto_rejected', counts.auto_rejected)}>
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.auto_rejected || 0}</div>
             <div className="stat-label">Auto-Rejected</div>
+            {studentCounts.auto_rejected > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.auto_rejected} Students</div>}
           </div>
         </div>
 
@@ -438,6 +507,107 @@ export default function AnalyticsPage() {
             </div>
           </div>
         )}
+
+        {/* Download CSV Modal */}
+        {showDownloadModal && (
+          <div className="modal-overlay" onClick={() => setShowDownloadModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '90vw' }}>
+              <div className="modal-header">
+                <h2>Download Analytics Report</h2>
+                <button className="btn btn-ghost" onClick={() => setShowDownloadModal(false)}>Close</button>
+              </div>
+              <div className="modal-body">
+                <p style={{ marginBottom: 'var(--space-md)' }}>Select the columns you want to include in the CSV download:</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
+                  {Object.entries(COLUMN_LABELS).map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={downloadColumns[key]}
+                        onChange={(e) => setDownloadColumns(prev => ({ ...prev, [key]: e.target.checked }))}
+                      />
+                      <span style={{ fontSize: 'var(--font-size-sm)' }}>{label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--space-md) 0' }}></div>
+
+                <p style={{ marginBottom: 'var(--space-md)' }}>Filter by Status (leave all unchecked to include all):</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
+                  {[
+                    'pending', 'approved', 'rejected', 'auto_rejected',
+                    'cancelled_by_student', 'cancelled_by_admin', 'completed',
+                    'cancel_requested', 'awaiting_checkin', 'checked_in', 'no_show', 'early_checkout'
+                  ].map((status) => (
+                    <label key={status} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={downloadStatuses.includes(status)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setDownloadStatuses([...downloadStatuses, status]);
+                          } else {
+                            setDownloadStatuses(downloadStatuses.filter(s => s !== status));
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: 'var(--font-size-sm)', textTransform: 'capitalize' }}>
+                        {status.replace(/_/g, ' ')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-md)' }}>
+                  <h3 style={{ fontSize: 'var(--font-size-md)', marginBottom: 'var(--space-sm)' }}>Live Preview</h3>
+                  <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                    Sample of how your CSV will look (showing current data).
+                  </p>
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
+                    <table className="data-table" style={{ fontSize: '12px' }}>
+                      <thead>
+                        <tr>
+                          {Object.entries(downloadColumns).filter(([, v]) => v).map(([k]) => (
+                            <th key={k} style={{ whiteSpace: 'nowrap' }}>{COLUMN_LABELS[k]}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[mockBooking].map((b, i) => (
+                          <tr key={i}>
+                            {Object.entries(downloadColumns).filter(([, v]) => v).map(([k]) => {
+                              let val = '';
+                              if (k === 'date') val = b.bookingDate;
+                              else if (k === 'slot') val = b.timeSlotId;
+                              else if (k === 'cabin') val = b.cabinId?.name;
+                              else if (k === 'student_name') val = b.mainStudent?.name;
+                              else if (k === 'enrollment') val = b.mainStudent?.enrollmentNumber;
+                              else if (k === 'phone') val = b.mainStudent?.phoneNumber;
+                              else if (k === 'email') val = b.studentUserId?.email;
+                              else if (k === 'people_count') val = b.peopleCount;
+                              else if (k === 'group_members') val = (b.groupMembers || []).map(m => m.name).join(', ');
+                              else if (k === 'status') val = b.status?.replace(/_/g, ' ');
+                              else if (k === 'requested_at') val = b.requestedAt ? new Date(b.requestedAt).toLocaleString() : '';
+                              return <td key={k} style={{ whiteSpace: 'nowrap' }}>{val || '-'}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-md)' }}>
+                <button className="btn btn-secondary" onClick={() => setShowDownloadModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleDownload} disabled={downloading}>
+                  {downloading ? 'Downloading...' : 'Download CSV'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

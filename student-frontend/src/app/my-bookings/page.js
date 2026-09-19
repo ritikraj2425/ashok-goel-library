@@ -95,8 +95,10 @@ export default function MyBookingsPage() {
                         <StatusBadge status={booking.status} />
                       </td>
                       <td>{formatDate(booking.requestedAt)}</td>
-                      <td style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', maxWidth: '200px' }}>
-                        {booking.rejectionReason || booking.cancellationReason || '-'}
+                      <td>
+                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', minWidth: '200px', whiteSpace: 'normal' }}>
+                          {booking.rejectionReason || booking.cancellationReason || '-'}
+                        </div>
                       </td>
                     </tr>
                   ))}

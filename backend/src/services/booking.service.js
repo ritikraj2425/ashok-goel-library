@@ -5,7 +5,7 @@ const User = require('../models/User');
 const { BOOKING_STATUS, ACTIVE_STATUSES, TIMING } = require('../utils/constants');
 const { normalizeEnrollment, normalizePhone, normalizeName } = require('../utils/normalize');
 const { runCleanup } = require('./cleanup.service');
-const { getFutureSlotsForToday, getSlotDetails } = require('../utils/date.utils');
+const { getFutureSlotsForToday, getSlotDetails, getTodaySchedule, getAbsoluteTimeForIST } = require('../utils/date.utils');
 
 /**
  * Helper: Create an error with a status code.
@@ -28,7 +28,7 @@ async function createBookingRequest(userId, body) {
 
   const user = await User.findById(userId);
   if (!user) throw createError('User not found');
-  
+
   if (user.isBlocked) {
     throw createError('Your account is permanently blocked. Contact administration.', 403);
   }
@@ -50,13 +50,27 @@ async function createBookingRequest(userId, body) {
     throw createError(`People count must be at least ${cabin.minPeople} for this cabin`);
   }
 
+  // --- Daily booking unlock check (30 min before first slot) ---
+  const schedule = await getTodaySchedule();
+  if (schedule.isClosed) {
+    throw createError('Bookings are closed for today.');
+  }
+  const [firstSlotH, firstSlotM] = schedule.startTime.split(':').map(Number);
+  const firstSlotStart = getAbsoluteTimeForIST(firstSlotH, firstSlotM);
+  const unlockTime = new Date(firstSlotStart.getTime() - 30 * 60 * 1000); // 30 min before
+  const now = new Date();
+  if (now < unlockTime) {
+    const unlockTimeStr = unlockTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+    throw createError(`Bookings for today will open at ${unlockTimeStr}.`);
+  }
+
   // --- Validate time slot ---
-  const validSlots = getFutureSlotsForToday();
+  const validSlots = await getFutureSlotsForToday();
   const isValid = validSlots.slots.some(s => s.id === timeSlotId);
   if (!isValid) {
     throw createError('Selected time slot is invalid or has already passed for today.');
   }
-  const slotDetails = getSlotDetails(timeSlotId);
+  const slotDetails = await getSlotDetails(timeSlotId);
 
   // --- Normalize inputs ---
   const normalizedMain = {
@@ -122,7 +136,7 @@ async function createBookingRequest(userId, body) {
 
   const enrollmentCounts = {};
   let userBookingsCount = 0;
-  
+
   for (const b of todaysBookings) {
     if (b.studentUserId && b.studentUserId.toString() === userId.toString()) {
       userBookingsCount++;
@@ -197,7 +211,7 @@ async function createBookingRequest(userId, body) {
   }
 
   // --- Create the booking ---
-  const now = new Date();
+  const requestTime = new Date();
   const booking = await Booking.create({
     cabinId: cabin._id,
     studentUserId: userId,
@@ -210,8 +224,8 @@ async function createBookingRequest(userId, body) {
     startTime: slotDetails.startTime,
     endTime: slotDetails.endTime,
     status: BOOKING_STATUS.PENDING,
-    requestedAt: now,
-    approvalDeadlineAt: new Date(now.getTime() + TIMING.PENDING_TIMEOUT_MS),
+    requestedAt: requestTime,
+    approvalDeadlineAt: new Date(requestTime.getTime() + TIMING.PENDING_TIMEOUT_MS),
     checkInDeadlineAt: new Date(
       Math.min(
         Math.max(now.getTime(), slotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
@@ -558,8 +572,8 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
     throw createError(`Cannot cancel booking with status: ${existing.status}`);
   }
 
-  const newStatus = bookingToCancel.status === BOOKING_STATUS.CHECKED_IN 
-    ? BOOKING_STATUS.EARLY_CHECKOUT 
+  const newStatus = bookingToCancel.status === BOOKING_STATUS.CHECKED_IN
+    ? BOOKING_STATUS.EARLY_CHECKOUT
     : BOOKING_STATUS.CANCELLED_BY_ADMIN;
 
   const booking = await Booking.findOneAndUpdate(
@@ -653,7 +667,8 @@ async function getAdminDashboard() {
   }
 
   // Get future slots for today
-  const futureSlots = getFutureSlotsForToday().slots;
+  const futureSlotsData = await getFutureSlotsForToday();
+  const futureSlots = futureSlotsData.slots;
 
   // Build cabin availability: each active cabin with its available (unbooked) future slots
   const cabinAvailability = cabins.map((cabin) => {
@@ -708,4 +723,70 @@ module.exports = {
   cancelBookingByAdmin,
   getAdminDashboard,
   getBookingById,
+  createAdminBooking,
 };
+
+/**
+ * Create a booking requested by an admin.
+ * Bypasses student rules and limits. Uses 'faculty' mode.
+ */
+async function createAdminBooking(adminId, adminUsername, body) {
+  const { cabinId, timeSlotId } = body;
+
+  const cabin = await Cabin.findById(cabinId);
+  if (!cabin) throw createError('Cabin not found', 404);
+  if (!cabin.isActive) throw createError('This cabin is currently inactive');
+
+  const schedule = await getTodaySchedule();
+  if (schedule.isClosed) {
+    throw createError('Library is closed today');
+  }
+
+  const validSlots = await getFutureSlotsForToday();
+  const isValid = validSlots.slots.some(s => s.id === timeSlotId);
+  if (!isValid) {
+    throw createError('Selected time slot is invalid or has already passed for today.');
+  }
+
+  const slotDetails = await getSlotDetails(timeSlotId);
+  
+  if (!slotDetails) {
+    throw createError('Invalid time slot');
+  }
+
+  // --- Rule: Cabin can have only one active booking for THIS SLOT ---
+  const existingCabinBooking = await Booking.findOne({
+    cabinId: cabin._id,
+    bookingDate: slotDetails.dateString,
+    timeSlotId: slotDetails.id,
+    status: { $in: ACTIVE_STATUSES },
+  });
+  if (existingCabinBooking) {
+    throw createError('This cabin is already booked or requested for this specific time slot');
+  }
+
+  const requestTime = new Date();
+  
+  const booking = await Booking.create({
+    cabinId: cabin._id,
+    studentUserId: adminId, // Uses admin's ID
+    userType: 'faculty', // Bypass schema changes by using faculty mode
+    mainStudent: {
+      name: `Admin: ${adminUsername}`,
+      enrollmentNumber: 'ADMIN',
+      phoneNumber: 'N/A'
+    },
+    groupMembers: [],
+    peopleCount: 1,
+    bookingDate: slotDetails.dateString,
+    timeSlotId: slotDetails.id,
+    startTime: slotDetails.startTime,
+    endTime: slotDetails.endTime,
+    status: BOOKING_STATUS.APPROVED,
+    requestedAt: requestTime,
+    approvedAt: requestTime,
+    approvedBy: adminId,
+  });
+
+  return booking;
+}

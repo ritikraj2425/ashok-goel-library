@@ -23,6 +23,8 @@ export default function DashboardPage() {
   const [selectedCabin, setSelectedCabin] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [bookingsLocked, setBookingsLocked] = useState(false);
+  const [bookingUnlockTime, setBookingUnlockTime] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -31,6 +33,8 @@ export default function DashboardPage() {
         getMyActiveBookings(),
       ]);
       setCabins(cabinData.cabins || []);
+      setBookingsLocked(cabinData.bookingsLocked || false);
+      setBookingUnlockTime(cabinData.bookingUnlockTime || null);
       setActiveBookings(bookingData.bookings || []);
       setError('');
     } catch (err) {
@@ -121,6 +125,17 @@ export default function DashboardPage() {
         {successMessage && <div className="alert alert-success">{successMessage}</div>}
         {error && !error.includes('blocked') && <div className="alert alert-error">{error}</div>}
 
+        {bookingsLocked && (
+          <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <span>
+              <strong>Bookings are currently locked.</strong>{' '}
+              {bookingUnlockTime
+                ? `Bookings for today will open at ${new Date(bookingUnlockTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}.`
+                : 'The library is closed today.'}
+            </span>
+          </div>
+        )}
+
         {activeBookings.length > 0 && activeBookings.map(booking => (
           <ActiveBookingBanner
             key={booking._id}
@@ -138,6 +153,7 @@ export default function DashboardPage() {
               cabin={cabin}
               hasActiveBooking={false}
               onBook={setSelectedCabin}
+              bookingsLocked={bookingsLocked}
             />
           ))}
         </div>
@@ -152,12 +168,11 @@ export default function DashboardPage() {
         <div className="rules-section">
           <h3>Library Cabin Booking Rules</h3>
           <ul>
-            <li>Cabins for the day can be booked on the same day and all requests will only get approved after 9:30 AM.</li>
-            <li>Students can book a cabin for a one-hour slot.</li>
+            <li>Cabins can be booked for the current day only. The booking portal unlocks 30 minutes before the library's first available slot of the day.</li>
             <li>A Student can book a maximum of 2 slots in a day.</li>
             <li>Each slot must be approved by an admin within 15 mins of the request.</li>
             <li>Students must check-in within 10 mins of the slot start time.</li>
-            <li>Missing check-in results in a two-day block.</li>
+            <li>Missing check-in results in a two-day temporary block.</li>
             <li>Cancelling an approved booking 3 times in a week results in a permanent block.</li>
             <li>To appeal a permanent block, you must meet with the library team.</li>
             <li>If you are leaving the cabin before your booked time slot ends, please inform the library team for checkout.</li>

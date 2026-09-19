@@ -22,6 +22,19 @@ router.get('/', authAdmin, async (req, res, next) => {
 });
 
 /**
+ * GET /api/admin/cabins/status
+ * Get cabin status with slots for admin booking interface.
+ */
+router.get('/status', authAdmin, async (req, res, next) => {
+  try {
+    const result = await cabinService.getCabinStatusForStudents();
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/admin/cabins
  * Create a new cabin (root only).
  */

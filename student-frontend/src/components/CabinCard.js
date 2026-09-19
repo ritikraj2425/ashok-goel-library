@@ -3,8 +3,8 @@
 import StatusBadge from './StatusBadge';
 import CountdownTimer from './CountdownTimer';
 
-export default function CabinCard({ cabin, hasActiveBooking, onBook }) {
-  const canBook = cabin.displayStatus === 'available' && !hasActiveBooking;
+export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLocked }) {
+  const canBook = cabin.displayStatus === 'available' && !hasActiveBooking && !bookingsLocked;
 
   return (
     <div className="card cabin-card">

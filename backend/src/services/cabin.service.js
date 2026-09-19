@@ -2,7 +2,7 @@ const Cabin = require('../models/Cabin');
 const Booking = require('../models/Booking');
 const { ACTIVE_STATUSES } = require('../utils/constants');
 const { runCleanup } = require('./cleanup.service');
-const { getFutureSlotsForToday } = require('../utils/date.utils');
+const { getFutureSlotsForToday, getTodaySchedule, getAbsoluteTimeForIST } = require('../utils/date.utils');
 
 /**
  * Get all cabins with their current booking status for student view.
@@ -13,9 +13,27 @@ async function getCabinStatusForStudents() {
 
   const cabins = await Cabin.find({ isActive: true }).sort({ code: 1 }).lean();
   
-  const futureSlotsData = getFutureSlotsForToday();
+  const futureSlotsData = await getFutureSlotsForToday();
   const validSlots = futureSlotsData.slots; // Array of slot objects
   const todayDateStr = futureSlotsData.date; // YYYY-MM-DD
+
+  // Calculate daily unlock time
+  const schedule = await getTodaySchedule();
+  let bookingsLocked = false;
+  let bookingUnlockTime = null;
+
+  if (schedule.isClosed) {
+    bookingsLocked = true;
+  } else {
+    const [firstSlotH, firstSlotM] = schedule.startTime.split(':').map(Number);
+    const firstSlotStart = getAbsoluteTimeForIST(firstSlotH, firstSlotM);
+    const unlockTime = new Date(firstSlotStart.getTime() - 30 * 60 * 1000);
+    const now = new Date();
+    if (now < unlockTime) {
+      bookingsLocked = true;
+      bookingUnlockTime = unlockTime.toISOString();
+    }
+  }
 
   // Get all active bookings for today
   const activeBookings = await Booking.find({
@@ -39,7 +57,7 @@ async function getCabinStatusForStudents() {
     }
   }
 
-  return cabins.map((cabin) => {
+  const cabinList = cabins.map((cabin) => {
     let displayStatus = 'available';
     const cid = cabin._id.toString();
     const bookedSlotIds = bookedSlotsByCabin[cid] || new Set();
@@ -65,6 +83,13 @@ async function getCabinStatusForStudents() {
       holdSlots,
     };
   });
+
+  return {
+    cabins: cabinList,
+    bookingsLocked,
+    bookingUnlockTime,
+    isClosed: schedule.isClosed,
+  };
 }
 
 /**

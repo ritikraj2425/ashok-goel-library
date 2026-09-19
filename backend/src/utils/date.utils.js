@@ -1,79 +1,34 @@
 /**
- * Date and Time utilities for slot-based booking
+ * Date and Time utilities for slot-based booking.
+ * Dynamically reads schedule from SystemSettings in the database.
  */
+const SystemSettings = require('../models/SystemSettings');
 
-// Generate slots for Monday to Saturday
-const generateMonSatSlots = () => {
-  const slots = [];
-  let currentHour = 9;
-  let currentMin = 30;
-  
-  while (currentHour < 21 || (currentHour === 21 && currentMin === 30)) {
-    const startHour = currentHour;
-    const startMin = currentMin;
-    
-    let endHour = startHour + 1;
-    let endMin = startMin;
-    
-    const formatTime = (h, m) => {
-      const isPM = h >= 12;
-      const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-      const displayM = m.toString().padStart(2, '0');
-      const ampm = isPM ? 'PM' : 'AM';
-      return `${displayH}:${displayM} ${ampm}`;
-    };
-    
-    const startTimeStr = formatTime(startHour, startMin);
-    const endTimeStr = formatTime(endHour, endMin);
-    
-    // Parse times for today to get absolute Date objects
-    slots.push({
-      id: `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}-${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`,
-      label: `${startTimeStr} - ${endTimeStr}`,
-      startHour,
-      startMin,
-      endHour,
-      endMin
-    });
-    
-    currentHour = endHour;
-    currentMin = endMin;
+// Cache settings for 30 seconds to avoid DB lookup on every request
+let _cachedSettings = null;
+let _cacheExpiry = 0;
+const CACHE_TTL = 30000; // 30 seconds
+
+async function getScheduleSettings() {
+  const now = Date.now();
+  if (_cachedSettings && now < _cacheExpiry) {
+    return _cachedSettings;
   }
-  return slots;
-};
-
-// Generate slots for Sunday
-const generateSunSlots = () => {
-  const slots = [];
-  for (let currentHour = 10; currentHour < 17; currentHour++) {
-    const startHour = currentHour;
-    const endHour = startHour + 1;
-    
-    const formatTime = (h, m) => {
-      const isPM = h >= 12;
-      const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-      const displayM = m.toString().padStart(2, '0');
-      const ampm = isPM ? 'PM' : 'AM';
-      return `${displayH}:${displayM} ${ampm}`;
-    };
-    
-    slots.push({
-      id: `${startHour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`,
-      label: `${formatTime(startHour, 0)} - ${formatTime(endHour, 0)}`,
-      startHour,
-      startMin: 0,
-      endHour,
-      endMin: 0
-    });
-  }
-  return slots;
-};
-
-const MON_SAT_SLOTS = generateMonSatSlots();
-const SUN_SLOTS = generateSunSlots();
+  _cachedSettings = await SystemSettings.getSettings();
+  _cacheExpiry = now + CACHE_TTL;
+  return _cachedSettings;
+}
 
 /**
- * Helper to get the current time components in IST
+ * Invalidate the settings cache (call after admin updates settings).
+ */
+function invalidateSettingsCache() {
+  _cachedSettings = null;
+  _cacheExpiry = 0;
+}
+
+/**
+ * Helper to get the current time components in IST.
  */
 function getISTParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -88,7 +43,7 @@ function getISTParts(date = new Date()) {
   }).formatToParts(date);
 
   const get = (type) => parseInt(parts.find(p => p.type === type).value, 10);
-  
+
   return {
     year: get('year'),
     month: get('month'), // 1-indexed
@@ -102,76 +57,181 @@ function getISTParts(date = new Date()) {
 /**
  * Creates an absolute Date object for a specific hour and minute in IST today.
  */
-function getAbsoluteTimeForIST(hour, minute) {
-  const now = new Date();
-  const istNow = getISTParts(now);
-  
-  // Create a Date treating the IST string as local time, but we must explicitly define the timezone
-  // The easiest way is to construct the ISO string for IST and parse it
+function getAbsoluteTimeForIST(hour, minute, isNextDay = false) {
+  const istNow = getISTParts(new Date());
   const pad = (n) => n.toString().padStart(2, '0');
   const isoString = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}T${pad(hour)}:${pad(minute)}:00.000+05:30`;
-  
-  return new Date(isoString);
+  const date = new Date(isoString);
+  if (isNextDay) {
+    date.setTime(date.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return date;
 }
 
 /**
- * Get all available slots for today that are in the future
- * @returns {Object} List of available slots
+ * Generate time slots dynamically from a schedule config.
+ * @param {string} startTime - "HH:mm"
+ * @param {string} endTime - "HH:mm"
+ * @param {number} slotDuration - minutes
+ * @returns {Array} Array of slot objects
  */
-function getFutureSlotsForToday() {
+function generateSlots(startTime, endTime, slotDuration) {
+  if (slotDuration <= 0) return [];
+  
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+
+  const startTotalMinutes = startH * 60 + startM;
+  let endTotalMinutes = endH * 60 + endM;
+  
+  if (endTotalMinutes <= startTotalMinutes) {
+    endTotalMinutes += 24 * 60; // Crosses midnight
+  }
+
+  const formatTime = (h, m) => {
+    const normalizedH = h % 24;
+    const isPM = normalizedH >= 12;
+    const displayH = normalizedH > 12 ? normalizedH - 12 : (normalizedH === 0 ? 12 : normalizedH);
+    const displayM = m.toString().padStart(2, '0');
+    const ampm = isPM ? 'PM' : 'AM';
+    return `${displayH}:${displayM} ${ampm}`;
+  };
+
+  const slots = [];
+  let currentMinutes = startTotalMinutes;
+
+  while (currentMinutes + slotDuration <= endTotalMinutes) {
+    const slotStartH = Math.floor(currentMinutes / 60) % 24;
+    const slotStartM = currentMinutes % 60;
+    const slotEndMinutes = currentMinutes + slotDuration;
+    const slotEndH = Math.floor(slotEndMinutes / 60) % 24;
+    const slotEndM = slotEndMinutes % 60;
+
+    const isNextDayStart = currentMinutes >= 24 * 60;
+    const isNextDayEnd = slotEndMinutes >= 24 * 60;
+
+    const pad = (n) => n.toString().padStart(2, '0');
+
+    slots.push({
+      id: `${pad(slotStartH)}:${pad(slotStartM)}-${pad(slotEndH)}:${pad(slotEndM)}`,
+      label: `${formatTime(slotStartH, slotStartM)} - ${formatTime(slotEndH, slotEndM)}`,
+      startHour: slotStartH,
+      startMin: slotStartM,
+      endHour: slotEndH,
+      endMin: slotEndM,
+      isNextDayStart,
+      isNextDayEnd
+    });
+
+    currentMinutes = slotEndMinutes;
+  }
+
+  return slots;
+}
+
+/**
+ * Map JS day-of-week (0=Sun) to day name.
+ */
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+/**
+ * Get the schedule config for today (checks exceptions first, then weekly schedule).
+ * @returns {Promise<{startTime: string, endTime: string, slotDuration: number, isClosed: boolean}>}
+ */
+async function getTodaySchedule() {
+  const settings = await getScheduleSettings();
   const now = new Date();
-  
-  // Need to get the day of the week in IST
-  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const dayOfWeek = dateInIST.getDay(); // 0 is Sunday
-  
-  const allSlots = dayOfWeek === 0 ? SUN_SLOTS : MON_SAT_SLOTS;
-  
-  const futureSlots = allSlots.filter(slot => {
-    // Get absolute time of the slot's end in IST
-    const slotEndTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin);
-    return slotEndTime > now;
-  });
-  
   const istNow = getISTParts(now);
   const pad = (n) => n.toString().padStart(2, '0');
-  
+  const todayStr = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`;
+
+  // Check exceptions first
+  const exception = settings.exceptions?.find(e => e.date === todayStr);
+  if (exception) {
+    return {
+      startTime: exception.startTime,
+      endTime: exception.endTime,
+      slotDuration: exception.slotDuration,
+      isClosed: !!exception.isClosed,
+    };
+  }
+
+  // Fall back to weekly schedule
+  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const dayOfWeek = dateInIST.getDay(); // 0 = Sunday
+  const dayName = DAY_NAMES[dayOfWeek];
+  const dayConfig = settings.weeklySchedule[dayName];
+
   return {
-    date: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`, // YYYY-MM-DD in IST
-    slots: futureSlots
+    startTime: dayConfig.startTime,
+    endTime: dayConfig.endTime,
+    slotDuration: dayConfig.slotDuration,
+    isClosed: !!dayConfig.isClosed,
   };
 }
 
 /**
- * Get slot by ID for today and return absolute Date objects for start and end
+ * Get all available slots for today that are in the future.
+ * @returns {Promise<{date: string, slots: Array}>}
  */
-function getSlotDetails(slotId) {
+async function getFutureSlotsForToday() {
   const now = new Date();
-  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const dayOfWeek = dateInIST.getDay();
-  
-  const allSlots = (dayOfWeek === 0) ? SUN_SLOTS : MON_SAT_SLOTS;
-  
-  const slot = allSlots.find(s => s.id === slotId);
-  if (!slot) return null;
-  
-  const startTime = getAbsoluteTimeForIST(slot.startHour, slot.startMin);
-  const endTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin);
-  
+  const schedule = await getTodaySchedule();
+
   const istNow = getISTParts(now);
   const pad = (n) => n.toString().padStart(2, '0');
-  
+  const todayStr = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`;
+
+  if (schedule.isClosed) {
+    return { date: todayStr, slots: [] };
+  }
+
+  const allSlots = generateSlots(schedule.startTime, schedule.endTime, schedule.slotDuration);
+
+  const futureSlots = allSlots.filter(slot => {
+    const slotEndTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin, slot.isNextDayEnd);
+    return slotEndTime > now;
+  });
+
+  return {
+    date: todayStr,
+    slots: futureSlots,
+  };
+}
+
+/**
+ * Get slot by ID for today and return absolute Date objects for start and end.
+ * @returns {Promise<Object|null>}
+ */
+async function getSlotDetails(slotId) {
+  const schedule = await getTodaySchedule();
+  if (schedule.isClosed) return null;
+
+  const allSlots = generateSlots(schedule.startTime, schedule.endTime, schedule.slotDuration);
+  const slot = allSlots.find(s => s.id === slotId);
+  if (!slot) return null;
+
+  const startTime = getAbsoluteTimeForIST(slot.startHour, slot.startMin, slot.isNextDayStart);
+  const endTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin, slot.isNextDayEnd);
+
+  const now = new Date();
+  const istNow = getISTParts(now);
+  const pad = (n) => n.toString().padStart(2, '0');
+
   return {
     ...slot,
     startTime,
     endTime,
-    dateString: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`
+    dateString: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`,
   };
 }
 
 module.exports = {
   getFutureSlotsForToday,
   getSlotDetails,
-  MON_SAT_SLOTS,
-  SUN_SLOTS
+  getTodaySchedule,
+  generateSlots,
+  invalidateSettingsCache,
+  getISTParts,
+  getAbsoluteTimeForIST,
 };

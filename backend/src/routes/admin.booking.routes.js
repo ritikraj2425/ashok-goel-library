@@ -8,6 +8,28 @@ const { logAction } = require('../services/audit.service');
 const { AUDIT_ACTIONS } = require('../utils/constants');
 
 /**
+ * POST /api/admin/bookings/admin-book
+ * Create a booking requested by an admin on their own behalf.
+ */
+router.post('/admin-book', authAdmin, async (req, res, next) => {
+  try {
+    const booking = await bookingService.createAdminBooking(req.admin._id, req.admin.username, req.body);
+    
+    await logAction({
+      action: AUDIT_ACTIONS.BOOKING_APPROVED,
+      performedBy: req.admin._id,
+      targetType: 'Booking',
+      targetId: booking._id,
+      details: { message: 'Admin self-booked cabin', cabinId: booking.cabinId },
+    });
+    
+    res.json({ message: 'Booking created successfully', booking });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/admin/bookings/:id
  * Get booking details.
  */

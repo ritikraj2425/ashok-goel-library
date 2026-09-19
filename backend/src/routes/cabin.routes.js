@@ -9,8 +9,8 @@ const { getCabinStatusForStudents } = require('../services/cabin.service');
  */
 router.get('/status', authStudent, async (req, res, next) => {
   try {
-    const cabins = await getCabinStatusForStudents();
-    res.json({ cabins });
+    const result = await getCabinStatusForStudents();
+    res.json(result);
   } catch (error) {
     next(error);
   }

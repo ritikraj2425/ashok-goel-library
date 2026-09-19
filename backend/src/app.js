@@ -18,6 +18,7 @@ const adminCabinRoutes = require('./routes/admin.cabin.routes');
 const adminUserRoutes = require('./routes/admin.user.routes');
 const adminStudentRoutes = require('./routes/admin.student.routes');
 const adminAnalyticsRoutes = require('./routes/admin.analytics.routes');
+const adminSettingsRoutes = require('./routes/admin.settings.routes');
 
 const connectDB = require('./config/db');
 
@@ -98,6 +99,7 @@ app.use('/api/admin/cabins', adminCabinRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/students', adminStudentRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
+app.use('/api/admin/settings', adminSettingsRoutes);
 
 // --- 404 handler ---
 app.use((req, res) => {

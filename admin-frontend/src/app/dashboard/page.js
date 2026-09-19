@@ -27,6 +27,19 @@ const formatTimeSlot = (slotStr) => {
   return formatTime(slotStr);
 };
 
+const renderUserTypeTag = (booking) => {
+  if (booking.userType === 'faculty') {
+    if (booking.mainStudent?.name?.startsWith('Admin:')) {
+      return <span className="badge" style={{ backgroundColor: '#6f42c1', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>Admin</span>;
+    }
+    return <span className="badge" style={{ backgroundColor: '#17a2b8', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>Faculty</span>;
+  }
+  // Optional: Return a student tag, or just nothing for students since it's the default.
+  // Returning nothing for students keeps it clean, but if explicitly wanted:
+  // return <span className="badge" style={{ backgroundColor: '#6c757d', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>Student</span>;
+  return null;
+};
+
 export default function AdminDashboardPage() {
   const { admin, loading: authLoading } = useAdminAuth();
   const router = useRouter();
@@ -192,7 +205,7 @@ export default function AdminDashboardPage() {
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
                     <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
@@ -245,7 +258,7 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
@@ -276,7 +289,7 @@ export default function AdminDashboardPage() {
                     <span className="badge badge-available">Checked In</span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
                     <div className="booking-card-detail">
@@ -307,7 +320,7 @@ export default function AdminDashboardPage() {
                     <span className="badge badge-booked">Approved</span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
 
