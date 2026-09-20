@@ -432,14 +432,22 @@ async function approveBooking(bookingId, adminId) {
   const existing = await Booking.findById(bookingId);
   if (!existing) throw createError('Booking not found', 404);
 
-  // If the check-in deadline has already passed, auto-reject it instead of approving.
-  if (now > existing.checkInDeadlineAt) {
+  // If the slot has already ended, auto-reject it instead of approving.
+  if (now >= existing.endTime) {
     existing.status = BOOKING_STATUS.AUTO_REJECTED;
     existing.rejectedAt = now;
-    existing.rejectionReason = 'Slot check-in deadline had already elapsed before approval.';
+    existing.rejectionReason = 'Slot time has already ended before approval.';
     await existing.save();
-    throw createError('Cannot approve booking: the time slot or check-in window has already elapsed. Booking has been auto-rejected.');
+    throw createError('Cannot approve booking: the time slot has already ended. Booking has been auto-rejected.');
   }
+
+  // Calculate new check-in deadline to give them a fair 10 minutes from approval time
+  const newCheckInDeadline = new Date(
+    Math.min(
+      Math.max(now.getTime(), existing.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
+      existing.endTime.getTime()
+    )
+  );
 
   // Atomic update: only if pending AND deadline not passed
   const booking = await Booking.findOneAndUpdate(
@@ -452,6 +460,7 @@ async function approveBooking(bookingId, adminId) {
       $set: {
         status: BOOKING_STATUS.APPROVED,
         approvedAt: now,
+        checkInDeadlineAt: newCheckInDeadline,
         expiresAt: existing.endTime, // Expires exactly when the slot ends
         approvedBy: adminId,
       },
