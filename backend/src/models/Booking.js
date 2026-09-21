@@ -48,7 +48,9 @@ const bookingSchema = new mongoose.Schema({
   },
 
   bookingDate: { type: String, required: true, index: true }, // YYYY-MM-DD
-  timeSlotId: { type: String, required: true }, // e.g. 09:30-10:30
+  timeSlotId: { type: String, required: true }, // e.g. 09:30-10:30 (primary/first slot)
+  timeSlotIds: { type: [String], default: [] }, // All slot IDs (for multi-slot bookings)
+  slotCount: { type: Number, default: 1, min: 1, max: 2 }, // How many slots this booking occupies
   startTime: { type: Date, required: true, index: true },
   endTime: { type: Date, required: true },
 

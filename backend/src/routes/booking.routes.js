@@ -34,8 +34,8 @@ router.post(
  */
 router.get('/my-active', authStudent, async (req, res, next) => {
   try {
-    const bookings = await bookingService.getMyActiveBookings(req.user._id);
-    res.json({ bookings });
+    const { bookings, slotsUsedToday } = await bookingService.getMyActiveBookings(req.user._id);
+    res.json({ bookings, slotsUsedToday });
   } catch (error) {
     next(error);
   }

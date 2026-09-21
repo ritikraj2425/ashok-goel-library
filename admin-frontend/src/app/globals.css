@@ -210,3 +210,59 @@ button { font-family:var(--font-family); cursor:pointer; border:none; background
   .dashboard-grid { grid-template-columns:1fr; }
   .stats-grid { grid-template-columns:repeat(2, 1fr); }
 }
+
+/* Responsive Admin Sidebar */
+.mobile-topbar {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  width: 100%;
+}
+.mobile-brand {
+  font-weight: 700;
+  font-size: var(--font-size-md);
+}
+.mobile-menu-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-primary);
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width:768px) {
+  .admin-layout {
+    flex-direction: column;
+  }
+  .mobile-topbar {
+    display: flex;
+  }
+  .sidebar-overlay {
+    display: block;
+  }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal) ease;
+    display: flex !important; /* Override the display:none */
+    z-index: 101;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}

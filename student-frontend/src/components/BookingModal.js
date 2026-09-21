@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { createBookingRequest } from '@/lib/api';
 
-export default function BookingModal({ cabin, onClose, onSuccess }) {
+export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots = 2 }) {
   const { user } = useAuth();
 
   const [userType, setUserType] = useState('student');
+  const [slotCount, setSlotCount] = useState(1);
   const [formData, setFormData] = useState({
     mainStudentName: user?.name || '',
     mainStudentEnrollment: user?.enrollmentNumber || '',
@@ -24,10 +25,42 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Generate consecutive slot pairs from available slots
+  const consecutiveSlotPairs = useMemo(() => {
+    if (!cabin.availableSlots || cabin.availableSlots.length < 2) return [];
+    const slots = cabin.availableSlots;
+    const pairs = [];
+    for (let i = 0; i < slots.length - 1; i++) {
+      if (slots[i].endHour === slots[i + 1].startHour && slots[i].endMin === slots[i + 1].startMin) {
+        pairs.push({
+          id: `${slots[i].id}+${slots[i + 1].id}`,
+          slot1: slots[i],
+          slot2: slots[i + 1],
+          label: `${slots[i].label.split(' - ')[0]} - ${slots[i + 1].label.split(' - ')[1]}`,
+        });
+      }
+    }
+    return pairs;
+  }, [cabin.availableSlots]);
+
+  // When slotCount changes, reset the selected slot
+  useEffect(() => {
+    if (slotCount === 1) {
+      setFormData(prev => ({
+        ...prev,
+        timeSlotId: cabin.availableSlots && cabin.availableSlots.length > 0 ? cabin.availableSlots[0].id : '',
+      }));
+    } else if (slotCount === 2) {
+      setFormData(prev => ({
+        ...prev,
+        timeSlotId: consecutiveSlotPairs.length > 0 ? consecutiveSlotPairs[0].id : '',
+      }));
+    }
+  }, [slotCount, cabin.availableSlots, consecutiveSlotPairs]);
+
   const handlePeopleCountChange = (e) => {
     const count = parseInt(e.target.value, 10);
     setFormData((prev) => ({ ...prev, peopleCount: count }));
-
     const newGroupSize = count - 1;
     setGroupMembers((prev) => {
       if (newGroupSize > prev.length) {
@@ -86,11 +119,9 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
           const m = groupMembers[i];
           const mName = m.name.trim();
           const mEnrollment = m.enrollmentNumber.trim();
-
           if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 2} name should only contain letters.`);
           if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 2} enrollment must be numbers only.`);
           validateEnrollment(mEnrollment, `Group member ${i + 2} enrollment`);
-
           if (enrollments.has(mEnrollment)) {
             throw new Error(`Duplicate enrollment number found: ${mEnrollment}`);
           }
@@ -98,7 +129,7 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
         }
       }
 
-      await createBookingRequest({
+      const requestBody = {
         cabinId: cabin.id,
         userType,
         mainStudent: {
@@ -111,8 +142,19 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
           enrollmentNumber: m.enrollmentNumber.trim(),
         })) : [],
         peopleCount: userType === 'student' ? formData.peopleCount : 1,
-        timeSlotId: formData.timeSlotId,
-      });
+        slotCount,
+      };
+
+      if (slotCount === 2) {
+        const [slot1Id, slot2Id] = formData.timeSlotId.split('+');
+        requestBody.timeSlotId = slot1Id;
+        requestBody.timeSlotIds = [slot1Id, slot2Id];
+      } else {
+        requestBody.timeSlotId = formData.timeSlotId;
+        requestBody.timeSlotIds = [formData.timeSlotId];
+      }
+
+      await createBookingRequest(requestBody);
       onSuccess();
     } catch (err) {
       setError(err.message || 'Failed to create booking request');
@@ -121,7 +163,6 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
     }
   };
 
-  // Generate people count options
   const countOptions = [];
   for (let i = cabin.minPeople; i <= cabin.maxPeople; i++) {
     countOptions.push(i);
@@ -154,6 +195,21 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">
+                Duration <span className="required">*</span>
+              </label>
+              <select
+                className="form-select"
+                value={slotCount}
+                onChange={(e) => setSlotCount(parseInt(e.target.value, 10))}
+              >
+                <option value={1}>1 Slot</option>
+                <option value={2} disabled={remainingSlots < 2 || consecutiveSlotPairs.length === 0}>
+                  2 Consecutive Slots {remainingSlots < 2 ? '(quota used)' : consecutiveSlotPairs.length === 0 ? '(no pairs available)' : ''}
+                </option>
+              </select>
+            </div>
 
             <div className="form-group">
               <label className="form-label">
@@ -165,14 +221,26 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
                 onChange={(e) => setFormData((prev) => ({ ...prev, timeSlotId: e.target.value }))}
                 required
               >
-                {cabin.availableSlots && cabin.availableSlots.length > 0 ? (
-                  cabin.availableSlots.map((slot) => (
-                    <option key={slot.id} value={slot.id}>
-                      {slot.label}
-                    </option>
-                  ))
+                {slotCount === 1 ? (
+                  cabin.availableSlots && cabin.availableSlots.length > 0 ? (
+                    cabin.availableSlots.map((slot) => (
+                      <option key={slot.id} value={slot.id}>
+                        {slot.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No slots available</option>
+                  )
                 ) : (
-                  <option value="" disabled>No slots available</option>
+                  consecutiveSlotPairs.length > 0 ? (
+                    consecutiveSlotPairs.map((pair) => (
+                      <option key={pair.id} value={pair.id}>
+                        {pair.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No consecutive slot pairs available</option>
+                  )
                 )}
               </select>
             </div>
@@ -201,49 +269,24 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
                 {userType === 'student' ? 'Main Student (Booking Owner)' : 'Faculty Details'}
               </span>
               <div className="form-group">
-                <label className="form-label">
-                  Full Name <span className="required">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.mainStudentName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, mainStudentName: e.target.value }))
-                  }
-                  placeholder="Enter full name"
-                  required
-                />
+                <label className="form-label">Full Name <span className="required">*</span></label>
+                <input type="text" className="form-input" value={formData.mainStudentName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, mainStudentName: e.target.value }))}
+                  placeholder="Enter full name" required />
               </div>
               <div className="form-group">
                 <label className="form-label">
                   {userType === 'student' ? 'Enrollment Number' : 'Employee ID'} <span className="required">*</span>
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.mainStudentEnrollment}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, mainStudentEnrollment: e.target.value }))
-                  }
-                  placeholder={`Enter ${userType === 'student' ? 'enrollment number' : 'employee ID'}`}
-                  required
-                />
+                <input type="text" className="form-input" value={formData.mainStudentEnrollment}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, mainStudentEnrollment: e.target.value }))}
+                  placeholder={`Enter ${userType === 'student' ? 'enrollment number' : 'employee ID'}`} required />
               </div>
               <div className="form-group">
-                <label className="form-label">
-                  Phone Number <span className="required">*</span>
-                </label>
-                <input
-                  type="tel"
-                  className="form-input"
-                  value={formData.mainStudentPhone}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, mainStudentPhone: e.target.value }))
-                  }
-                  placeholder="Enter phone number"
-                  required
-                />
+                <label className="form-label">Phone Number <span className="required">*</span></label>
+                <input type="tel" className="form-input" value={formData.mainStudentPhone}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, mainStudentPhone: e.target.value }))}
+                  placeholder="Enter phone number" required />
               </div>
             </div>
 
@@ -257,34 +300,16 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
                     <div className="group-member-label">Member {index + 2}</div>
                     <div className="group-member-row">
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">
-                          Name <span className="required">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={member.name}
-                          onChange={(e) =>
-                            handleGroupMemberChange(index, 'name', e.target.value)
-                          }
-                          placeholder="Full name"
-                          required
-                        />
+                        <label className="form-label">Name <span className="required">*</span></label>
+                        <input type="text" className="form-input" value={member.name}
+                          onChange={(e) => handleGroupMemberChange(index, 'name', e.target.value)}
+                          placeholder="Full name" required />
                       </div>
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">
-                          Enrollment No. <span className="required">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={member.enrollmentNumber}
-                          onChange={(e) =>
-                            handleGroupMemberChange(index, 'enrollmentNumber', e.target.value)
-                          }
-                          placeholder="Enrollment number"
-                          required
-                        />
+                        <label className="form-label">Enrollment No. <span className="required">*</span></label>
+                        <input type="text" className="form-input" value={member.enrollmentNumber}
+                          onChange={(e) => handleGroupMemberChange(index, 'enrollmentNumber', e.target.value)}
+                          placeholder="Enrollment number" required />
                       </div>
                     </div>
                   </div>
@@ -296,11 +321,9 @@ export default function BookingModal({ cabin, onClose, onSuccess }) {
           <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
             {error && <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-md)' }}>
-              <button type="button" className="btn btn-secondary" onClick={onClose}>
-                Cancel
-              </button>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Submitting...' : 'Submit Booking Request'}
+                {loading ? 'Submitting...' : slotCount === 2 ? 'Submit 2-Slot Booking' : 'Submit Booking Request'}
               </button>
             </div>
           </div>

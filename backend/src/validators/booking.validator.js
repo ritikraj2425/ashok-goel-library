@@ -8,6 +8,8 @@ const groupMemberSchema = z.object({
 const createBookingSchema = z.object({
   cabinId: z.string().min(1, 'Cabin ID is required'),
   timeSlotId: z.string().min(1, 'Time slot is required'),
+  timeSlotIds: z.array(z.string().min(1)).max(2).optional(),
+  slotCount: z.number().int().min(1).max(2).default(1),
   userType: z.enum(['student', 'faculty']).default('student'),
   mainStudent: z.object({
     name: z.string().trim().regex(/^[a-zA-Z\s\.\-']+$/, 'Name should only contain letters').min(1, 'Name is required'),

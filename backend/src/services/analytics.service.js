@@ -88,6 +88,7 @@ async function getAnalytics(startDate, endDate, search = '') {
         cabinCode: { $first: '$cabin.code' },
         cabinName: { $first: '$cabin.name' },
         bookingCount: { $sum: 1 },
+        totalSlots: { $sum: { $ifNull: ['$slotCount', 1] } },
         totalPeople: { $sum: '$peopleCount' },
       },
     },
@@ -112,8 +113,20 @@ async function getAnalytics(startDate, endDate, search = '') {
       },
     },
     {
+      $addFields: {
+        allSlots: {
+          $cond: {
+            if: { $and: [{ $isArray: '$timeSlotIds' }, { $gt: [{ $size: '$timeSlotIds' }, 0] }] },
+            then: '$timeSlotIds',
+            else: ['$timeSlotId']
+          }
+        }
+      }
+    },
+    { $unwind: '$allSlots' },
+    {
       $group: {
-        _id: '$timeSlotId',
+        _id: '$allSlots',
         count: { $sum: 1 },
       },
     },
@@ -270,7 +283,17 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
   // All possible columns and their extractors
   const COLUMN_MAP = {
     date: { header: 'Date', extract: (b) => b.bookingDate || '' },
-    slot: { header: 'Time Slot', extract: (b) => b.timeSlotId || '' },
+    slot: { 
+      header: 'Time Slot', 
+      extract: (b) => {
+        if (b.timeSlotIds && b.timeSlotIds.length > 1) {
+          const first = b.timeSlotIds[0].split('-')[0];
+          const last = b.timeSlotIds[b.timeSlotIds.length - 1].split('-')[1];
+          return `${first}-${last}`;
+        }
+        return b.timeSlotId || '';
+      }
+    },
     cabin: { header: 'Cabin', extract: (b) => b.cabinId?.name || '' },
     cabin_code: { header: 'Cabin Code', extract: (b) => b.cabinId?.code || '' },
     student_name: { header: 'Student Name', extract: (b) => b.mainStudent?.name || '' },

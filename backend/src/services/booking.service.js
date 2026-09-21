@@ -19,12 +19,13 @@ function createError(message, statusCode = 400) {
 /**
  * Create a new booking request.
  * Enforces ALL booking rules atomically.
+ * Supports slotCount=1 (single) or slotCount=2 (two consecutive slots).
  */
 async function createBookingRequest(userId, body) {
   // Run cleanup first to clear expired bookings
   await runCleanup();
 
-  const { cabinId, timeSlotId, userType = 'student', mainStudent, groupMembers = [], peopleCount } = body;
+  const { cabinId, timeSlotId, timeSlotIds, slotCount = 1, userType = 'student', mainStudent, groupMembers = [], peopleCount } = body;
 
   const user = await User.findById(userId);
   if (!user) throw createError('User not found');
@@ -64,13 +65,50 @@ async function createBookingRequest(userId, body) {
     throw createError(`Bookings for today will open at ${unlockTimeStr}.`);
   }
 
-  // --- Validate time slot ---
-  const validSlots = await getFutureSlotsForToday();
-  const isValid = validSlots.slots.some(s => s.id === timeSlotId);
-  if (!isValid) {
-    throw createError('Selected time slot is invalid or has already passed for today.');
+  // --- Validate slot count ---
+  if (slotCount < 1 || slotCount > 2) {
+    throw createError('Slot count must be 1 or 2.');
   }
-  const slotDetails = await getSlotDetails(timeSlotId);
+
+  // --- Resolve all slot IDs for this booking ---
+  let resolvedSlotIds;
+  if (slotCount === 2) {
+    resolvedSlotIds = timeSlotIds && timeSlotIds.length === 2 ? timeSlotIds : null;
+    if (!resolvedSlotIds) {
+      throw createError('Two time slot IDs are required for a 2-slot booking.');
+    }
+  } else {
+    resolvedSlotIds = [timeSlotId];
+  }
+
+  // --- Validate all slots exist and are future ---
+  const validSlots = await getFutureSlotsForToday();
+  const allSlotDetails = [];
+  for (const sid of resolvedSlotIds) {
+    const isValid = validSlots.slots.some(s => s.id === sid);
+    if (!isValid) {
+      throw createError(`Time slot ${sid} is invalid or has already passed for today.`);
+    }
+    const details = await getSlotDetails(sid);
+    if (!details) {
+      throw createError(`Could not resolve details for slot ${sid}.`);
+    }
+    allSlotDetails.push(details);
+  }
+
+  // --- For 2-slot bookings, verify they are consecutive ---
+  if (slotCount === 2) {
+    allSlotDetails.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    const firstSlotEnd = allSlotDetails[0].endTime.getTime();
+    const secondSlotStart = allSlotDetails[1].startTime.getTime();
+    if (firstSlotEnd !== secondSlotStart) {
+      throw createError('The two selected slots must be consecutive (back-to-back).');
+    }
+    resolvedSlotIds = allSlotDetails.map(s => s.id);
+  }
+
+  const primarySlotDetails = allSlotDetails[0];
+  const mergedEndTime = allSlotDetails[allSlotDetails.length - 1].endTime;
 
   // --- Normalize inputs ---
   const normalizedMain = {
@@ -113,101 +151,144 @@ async function createBookingRequest(userId, body) {
   // --- Collect all enrollment numbers for duplicate checks ---
   const allEnrollments = [mainEnrollment, ...normalizedGroupMembers.map((m) => m.enrollmentNumber)];
 
-  // --- Rule 11: Max 2 bookings per day per enrollment or account ---
+  // --- Rule 11: Max 2 SLOTS per day per enrollment or account (sum slotCount) ---
   const todaysBookings = await Booking.find({
-    bookingDate: slotDetails.dateString,
-    status: {
-      $in: [
-        BOOKING_STATUS.PENDING,
-        BOOKING_STATUS.APPROVED,
-        BOOKING_STATUS.CANCEL_REQUESTED,
-        BOOKING_STATUS.AWAITING_CHECKIN,
-        BOOKING_STATUS.CHECKED_IN,
-        BOOKING_STATUS.COMPLETED,
-        BOOKING_STATUS.EARLY_CHECKOUT,
-      ],
-    },
-    $or: [
-      { studentUserId: userId },
-      { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
-      { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
-    ],
-  }).select('studentUserId mainStudent groupMembers').lean();
+    bookingDate: primarySlotDetails.dateString,
+    $and: [
+      {
+        $or: [
+          {
+            status: {
+              $in: [
+                BOOKING_STATUS.PENDING,
+                BOOKING_STATUS.APPROVED,
+                BOOKING_STATUS.CANCEL_REQUESTED,
+                BOOKING_STATUS.AWAITING_CHECKIN,
+                BOOKING_STATUS.CHECKED_IN,
+                BOOKING_STATUS.COMPLETED,
+                BOOKING_STATUS.EARLY_CHECKOUT,
+              ],
+            },
+          },
+          {
+            status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
+            approvedAt: { $exists: true, $ne: null },
+          }
+        ]
+      },
+      {
+        $or: [
+          { studentUserId: userId },
+          { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
+          { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
+        ]
+      }
+    ]
+  }).select('studentUserId mainStudent groupMembers slotCount').lean();
 
-  const enrollmentCounts = {};
-  let userBookingsCount = 0;
+  const enrollmentSlotCounts = {};
+  let userSlotCount = 0;
 
   for (const b of todaysBookings) {
+    const bSlotCount = b.slotCount || 1;
     if (b.studentUserId && b.studentUserId.toString() === userId.toString()) {
-      userBookingsCount++;
+      userSlotCount += bSlotCount;
     }
     if (b.mainStudent?.enrollmentNumber) {
-      enrollmentCounts[b.mainStudent.enrollmentNumber] = (enrollmentCounts[b.mainStudent.enrollmentNumber] || 0) + 1;
+      enrollmentSlotCounts[b.mainStudent.enrollmentNumber] = (enrollmentSlotCounts[b.mainStudent.enrollmentNumber] || 0) + bSlotCount;
     }
     for (const member of (b.groupMembers || [])) {
       if (member.enrollmentNumber) {
-        enrollmentCounts[member.enrollmentNumber] = (enrollmentCounts[member.enrollmentNumber] || 0) + 1;
+        enrollmentSlotCounts[member.enrollmentNumber] = (enrollmentSlotCounts[member.enrollmentNumber] || 0) + bSlotCount;
       }
     }
   }
 
-  if (userBookingsCount >= 2) {
-    throw createError('Your account has already booked 2 slots for this day. More than 2 slots of cabin are not allowed for a user in a day.');
+  if (userSlotCount + slotCount > 2) {
+    throw createError(`Your account has already used ${userSlotCount} slot(s) for this day. You cannot book ${slotCount} more (max 2 slots per day).`);
   }
 
   for (const enrollment of allEnrollments) {
-    if (enrollmentCounts[enrollment] >= 2) {
-      throw createError(`Enrollment number ${enrollment} has already 2 bookings complete on a day. More than 2 slots of cabin are not allowed for a user in a day.`);
+    const used = enrollmentSlotCounts[enrollment] || 0;
+    if (used + slotCount > 2) {
+      throw createError(`Enrollment number ${enrollment} has already used ${used} slot(s) today. Cannot book ${slotCount} more (max 2 slots per day).`);
     }
   }
 
-  // --- Rule 3: User cannot book overlapping slots ---
-  const userOverlappingBooking = await Booking.findOne({
-    studentUserId: userId,
-    timeSlotId: slotDetails.id,
-    bookingDate: slotDetails.dateString,
-    status: { $in: ACTIVE_STATUSES },
-  });
-  if (userOverlappingBooking) {
-    throw createError('You already have an active booking or request for this specific time slot');
-  }
+  // --- Check all requested slots for conflicts ---
+  for (const slotDetail of allSlotDetails) {
+    // --- Rule 3: User cannot book overlapping slots ---
+    const userOverlappingBooking = await Booking.findOne({
+      studentUserId: userId,
+      bookingDate: slotDetail.dateString,
+      status: { $in: ACTIVE_STATUSES },
+      $or: [
+        { timeSlotId: slotDetail.id },
+        { timeSlotIds: slotDetail.id },
+      ],
+    });
+    if (userOverlappingBooking) {
+      throw createError(`You already have an active booking or request for time slot ${slotDetail.id}`);
+    }
 
-  // --- Rule 2: Cabin can have only one active booking for THIS SLOT ---
-  const existingCabinBooking = await Booking.findOne({
-    cabinId: cabin._id,
-    bookingDate: slotDetails.dateString,
-    timeSlotId: slotDetails.id,
-    status: { $in: ACTIVE_STATUSES },
-  });
-  if (existingCabinBooking) {
-    throw createError('This cabin is already booked or requested for this specific time slot');
-  }
+    // --- Rule 2: Cabin can have only one active booking for THIS SLOT ---
+    const existingCabinBooking = await Booking.findOne({
+      cabinId: cabin._id,
+      bookingDate: slotDetail.dateString,
+      status: { $in: ACTIVE_STATUSES },
+      $or: [
+        { timeSlotId: slotDetail.id },
+        { timeSlotIds: slotDetail.id },
+      ],
+    });
+    if (existingCabinBooking) {
+      throw createError(`This cabin is already booked or requested for time slot ${slotDetail.id}`);
+    }
 
-  // --- Rules 4, 5: Check enrollment numbers against THIS SLOT's active bookings ---
-  const enrollmentConflict = await Booking.findOne({
-    timeSlotId: slotDetails.id,
-    bookingDate: slotDetails.dateString,
-    status: { $in: ACTIVE_STATUSES },
-    $or: [
-      { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
-      { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
-    ],
-  });
-  if (enrollmentConflict) {
-    throw createError(
-      'One or more enrollment numbers are already part of an active booking for this time slot'
-    );
-  }
+    // --- Rules 4, 5: Check enrollment numbers against THIS SLOT's active bookings ---
+    const enrollmentConflict = await Booking.findOne({
+      bookingDate: slotDetail.dateString,
+      status: { $in: ACTIVE_STATUSES },
+      $or: [
+        { timeSlotId: slotDetail.id },
+        { timeSlotIds: slotDetail.id },
+      ],
+      'mainStudent.enrollmentNumber': { $in: allEnrollments },
+    });
+    if (!enrollmentConflict) {
+      const groupEnrollmentConflict = await Booking.findOne({
+        bookingDate: slotDetail.dateString,
+        status: { $in: ACTIVE_STATUSES },
+        $or: [
+          { timeSlotId: slotDetail.id },
+          { timeSlotIds: slotDetail.id },
+        ],
+        'groupMembers.enrollmentNumber': { $in: allEnrollments },
+      });
+      if (groupEnrollmentConflict) {
+        throw createError(
+          `One or more enrollment numbers are already part of an active booking for time slot ${slotDetail.id}`
+        );
+      }
+    } else {
+      throw createError(
+        `One or more enrollment numbers are already part of an active booking for time slot ${slotDetail.id}`
+      );
+    }
 
-  // --- Rule 8: Phone number cannot be in another active booking for THIS SLOT ---
-  const phoneConflict = await Booking.findOne({
-    timeSlotId: slotDetails.id,
-    bookingDate: slotDetails.dateString,
-    status: { $in: ACTIVE_STATUSES },
-    'mainStudent.phoneNumber': normalizedMain.phoneNumber,
-  });
-  if (phoneConflict) {
-    throw createError('Phone number is already used in an active booking for this time slot');
+    // --- Rule 8: Phone number cannot be in another active booking for THIS SLOT ---
+    const phoneConflict = await Booking.findOne({
+      bookingDate: slotDetail.dateString,
+      status: { $in: ACTIVE_STATUSES },
+      $or: [
+        { timeSlotId: slotDetail.id },
+        { timeSlotIds: slotDetail.id },
+      ],
+      'mainStudent.phoneNumber': normalizedMain.phoneNumber,
+    });
+    if (phoneConflict) {
+      throw createError(`Phone number is already used in an active booking for time slot ${slotDetail.id}`);
+    }
   }
 
   // --- Create the booking ---
@@ -219,23 +300,26 @@ async function createBookingRequest(userId, body) {
     mainStudent: normalizedMain,
     groupMembers: normalizedGroupMembers,
     peopleCount,
-    bookingDate: slotDetails.dateString,
-    timeSlotId: slotDetails.id,
-    startTime: slotDetails.startTime,
-    endTime: slotDetails.endTime,
+    bookingDate: primarySlotDetails.dateString,
+    timeSlotId: resolvedSlotIds[0],
+    timeSlotIds: resolvedSlotIds,
+    slotCount,
+    startTime: primarySlotDetails.startTime,
+    endTime: mergedEndTime,
     status: BOOKING_STATUS.PENDING,
     requestedAt: requestTime,
     approvalDeadlineAt: new Date(requestTime.getTime() + TIMING.PENDING_TIMEOUT_MS),
     checkInDeadlineAt: new Date(
       Math.min(
-        Math.max(now.getTime(), slotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
-        slotDetails.endTime.getTime()
+        Math.max(now.getTime(), primarySlotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
+        mergedEndTime.getTime()
       )
     ),
   });
 
   return booking;
 }
+
 
 /**
  * Get the active bookings for a student.
@@ -251,7 +335,35 @@ async function getMyActiveBookings(userId) {
     .sort({ startTime: 1 })
     .lean();
 
-  return bookings;
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const todaysBookings = await Booking.find({
+    studentUserId: userId,
+    bookingDate: dateString,
+    $or: [
+      {
+        status: {
+          $in: [
+            BOOKING_STATUS.PENDING,
+            BOOKING_STATUS.APPROVED,
+            BOOKING_STATUS.CANCEL_REQUESTED,
+            BOOKING_STATUS.AWAITING_CHECKIN,
+            BOOKING_STATUS.CHECKED_IN,
+            BOOKING_STATUS.COMPLETED,
+            BOOKING_STATUS.EARLY_CHECKOUT,
+          ],
+        },
+      },
+      {
+        status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
+        approvedAt: { $exists: true, $ne: null },
+      }
+    ]
+  }).select('slotCount').lean();
+
+  const slotsUsedToday = todaysBookings.reduce((sum, b) => sum + (b.slotCount || 1), 0);
+
+  return { bookings, slotsUsedToday };
 }
 
 /**
@@ -660,7 +772,7 @@ async function getAdminDashboard() {
       bookingDate: now.toISOString().split('T')[0],
       status: { $in: ACTIVE_STATUSES },
     })
-      .select('cabinId timeSlotId')
+      .select('cabinId timeSlotId timeSlotIds')
       .lean(),
 
     // All cabins
@@ -672,7 +784,10 @@ async function getAdminDashboard() {
   for (const b of allActiveTodayBookings) {
     const cabinIdStr = b.cabinId.toString();
     if (!cabinOccupiedSlots[cabinIdStr]) cabinOccupiedSlots[cabinIdStr] = new Set();
-    cabinOccupiedSlots[cabinIdStr].add(b.timeSlotId);
+    const slots = (b.timeSlotIds && b.timeSlotIds.length > 0) ? b.timeSlotIds : [b.timeSlotId];
+    for (const slot of slots) {
+      cabinOccupiedSlots[cabinIdStr].add(slot);
+    }
   }
 
   // Get future slots for today

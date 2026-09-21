@@ -24,8 +24,11 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
   else if (isAwaitingCheckin) title = 'Awaiting Check-in (Go to Cabin)';
   else if (isCheckedIn) title = 'Your Active Session';
 
-  const formatTimeSlot = (slotStr) => {
-    if (!slotStr) return '';
+  const formatTimeSlot = (bookingObj) => {
+    const slotStrs = bookingObj.timeSlotIds && bookingObj.timeSlotIds.length > 0 
+      ? bookingObj.timeSlotIds 
+      : [bookingObj.timeSlotId];
+      
     const formatTime = (time24) => {
       const [h, m] = time24.split(':');
       if (!h || !m) return time24;
@@ -34,10 +37,19 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
       const hour12 = hour % 12 || 12;
       return `${hour12}:${m} ${suffix}`;
     };
-    if (slotStr.includes('-')) {
-      return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+
+    if (slotStrs.length > 1) {
+       const start = slotStrs[0].split('-')[0];
+       const end = slotStrs[slotStrs.length - 1].split('-')[1];
+       return `${formatTime(start.trim())} - ${formatTime(end.trim())}`;
+    } else {
+       const slotStr = slotStrs[0];
+       if (!slotStr) return '';
+       if (slotStr.includes('-')) {
+         return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+       }
+       return formatTime(slotStr);
     }
-    return formatTime(slotStr);
   };
 
   return (
@@ -72,7 +84,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
         </div>
         <div className="booking-detail">
           <span className="label">Time Slot</span>
-          {formatTimeSlot(booking.timeSlotId)}
+          {formatTimeSlot(booking)}
         </div>
         {(!isPending && !hasStarted) ? (
           <div className="booking-detail">
@@ -143,7 +155,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
       {confirmCancel && (
         <ConfirmDialog
           title="Cancel Booking"
-          message="Are you sure you want to cancel this booking? The slot will be immediately freed up for others."
+          message="Are you sure you want to cancel this booking? WARNING: Since this booking has already been approved, cancelling it now will STILL count against your daily quota limit (2 slots max). You will NOT get this quota back for today."
           confirmLabel="Cancel Booking"
           confirmClass="btn-danger"
           onConfirm={async () => {

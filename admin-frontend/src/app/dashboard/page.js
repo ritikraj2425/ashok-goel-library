@@ -20,11 +20,22 @@ const formatTimeSlot = (slotStr) => {
     const hour12 = hour % 12 || 12;
     return `${hour12}:${m} ${suffix}`;
   };
-  
+
   if (slotStr.includes('-')) {
     return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
   }
   return formatTime(slotStr);
+};
+
+const formatBookingTimeSlot = (booking) => {
+  if (booking.timeSlotIds && booking.timeSlotIds.length > 1) {
+    const firstSlot = booking.timeSlotIds[0];
+    const lastSlot = booking.timeSlotIds[booking.timeSlotIds.length - 1];
+    const start = firstSlot.split('-')[0];
+    const end = lastSlot.split('-')[1];
+    return formatTimeSlot(`${start}-${end}`);
+  }
+  return formatTimeSlot(booking.timeSlotId);
 };
 
 const renderUserTypeTag = (booking) => {
@@ -34,9 +45,14 @@ const renderUserTypeTag = (booking) => {
     }
     return <span className="badge" style={{ backgroundColor: '#17a2b8', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>Faculty</span>;
   }
-  // Optional: Return a student tag, or just nothing for students since it's the default.
-  // Returning nothing for students keeps it clean, but if explicitly wanted:
-  // return <span className="badge" style={{ backgroundColor: '#6c757d', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>Student</span>;
+  return null;
+};
+
+const renderSlotCountTag = (booking) => {
+  const count = booking.slotCount || 1;
+  if (count > 1) {
+    return <span className="badge" style={{ backgroundColor: '#e67e22', color: 'white', marginLeft: 8, fontSize: '0.7rem' }}>{count}x</span>;
+  }
   return null;
 };
 
@@ -204,8 +220,8 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="booking-card-details">
                     <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatBookingTimeSlot(booking)}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)} {renderSlotCountTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
                     <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
                     <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
@@ -258,9 +274,9 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)} {renderSlotCountTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatBookingTimeSlot(booking)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Deadline</span>
                       <CountdownTimer targetDate={booking.checkInDeadlineAt} />
@@ -289,9 +305,9 @@ export default function AdminDashboardPage() {
                     <span className="badge badge-available">Checked In</span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)} {renderSlotCountTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatBookingTimeSlot(booking)}</div>
                     <div className="booking-card-detail">
                       <span className="label">Ends in</span>
                       <CountdownTimer targetDate={booking.endTime} />
@@ -320,9 +336,9 @@ export default function AdminDashboardPage() {
                     <span className="badge badge-booked">Approved</span>
                   </div>
                   <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)}</div>
+                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)} {renderSlotCountTag(booking)}</div>
                     <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{formatTimeSlot(booking.timeSlotId)}</div>
+                    <div className="booking-card-detail"><span className="label">Slot</span>{formatBookingTimeSlot(booking)}</div>
 
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
@@ -395,14 +411,14 @@ export default function AdminDashboardPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                     <div><strong>Cabin:</strong> {detailBooking.cabinId?.name}</div>
                     <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
-                    <div><strong>Slot:</strong> {formatTimeSlot(detailBooking.timeSlotId)}</div>
+                    <div><strong>Slot:</strong> {formatBookingTimeSlot(detailBooking)}</div>
                     <div>
                       <strong>Status:</strong>
                       <span className={`badge badge-${detailBooking.status === 'approved' ? 'booked' : detailBooking.status}`} style={{ marginLeft: 'var(--space-xs)' }}>
                         {detailBooking.status === 'no_show' ? 'Missed Check-in' :
                           detailBooking.status === 'early_checkout' ? 'Early Checkout' :
-                          detailBooking.status === 'cancelled_by_admin' ? 'Admin Cancelled' :
-                          detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            detailBooking.status === 'cancelled_by_admin' ? 'Admin Cancelled' :
+                              detailBooking.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </span>
                     </div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent.name}</div>

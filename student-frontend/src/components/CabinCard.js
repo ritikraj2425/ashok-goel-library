@@ -63,7 +63,7 @@ export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLoc
           </button>
         ) : cabin.displayStatus === 'available' && hasActiveBooking ? (
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-            You have an active booking
+            Daily quota reached
           </span>
         ) : (
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>

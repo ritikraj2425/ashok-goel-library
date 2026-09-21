@@ -33,6 +33,17 @@ const formatTimeSlot = (slotStr) => {
   return formatTime(slotStr);
 };
 
+const formatBookingTimeSlot = (booking) => {
+  if (booking.timeSlotIds && booking.timeSlotIds.length > 1) {
+    const firstSlot = booking.timeSlotIds[0];
+    const lastSlot = booking.timeSlotIds[booking.timeSlotIds.length - 1];
+    const start = firstSlot.split('-')[0];
+    const end = lastSlot.split('-')[1];
+    return formatTimeSlot(`${start}-${end}`);
+  }
+  return formatTimeSlot(booking.timeSlotId);
+};
+
 const statusMap = {
   pending: { label: 'Pending', className: 'badge-pending' },
   approved: { label: 'Approved', className: 'badge-available' },
@@ -403,7 +414,7 @@ export default function AnalyticsPage() {
                         {statusBookings.map(b => (
                           <tr key={b._id} onClick={() => handleViewDetail(b._id)} style={{ cursor: 'pointer' }} className="table-row-hover">
                             <td>{b.bookingDate}</td>
-                            <td>{formatTimeSlot(b.timeSlotId)}</td>
+                            <td>{formatBookingTimeSlot(b)}</td>
                             <td>{b.studentUserId?.name || b.mainStudent?.name}</td>
                             <td>{b.studentUserId?.email || '-'}</td>
                             <td>{b.mainStudent?.phoneNumber || '-'}</td>
@@ -478,7 +489,7 @@ export default function AnalyticsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                     <div><strong>Cabin:</strong> {detailBooking.cabinId?.name}</div>
                     <div><strong>Date:</strong> {detailBooking.bookingDate}</div>
-                    <div><strong>Slot:</strong> {formatTimeSlot(detailBooking.timeSlotId)}</div>
+                    <div><strong>Slot:</strong> {formatBookingTimeSlot(detailBooking)}</div>
                     <div><strong>Status:</strong> <span className={`badge ${statusMap[detailBooking.status]?.className || 'badge-default'}`}>{statusMap[detailBooking.status]?.label || detailBooking.status}</span></div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent?.name}</div>
                     <div><strong>Enrollment:</strong> {detailBooking.mainStudent?.enrollmentNumber}</div>
@@ -579,7 +590,7 @@ export default function AnalyticsPage() {
                             {Object.entries(downloadColumns).filter(([, v]) => v).map(([k]) => {
                               let val = '';
                               if (k === 'date') val = b.bookingDate;
-                              else if (k === 'slot') val = b.timeSlotId;
+                              else if (k === 'slot') val = formatBookingTimeSlot(b);
                               else if (k === 'cabin') val = b.cabinId?.name;
                               else if (k === 'student_name') val = b.mainStudent?.name;
                               else if (k === 'enrollment') val = b.mainStudent?.enrollmentNumber;

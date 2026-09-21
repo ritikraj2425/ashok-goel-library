@@ -18,6 +18,7 @@ export default function DashboardPage() {
 
   const [cabins, setCabins] = useState([]);
   const [activeBookings, setActiveBookings] = useState([]);
+  const [slotsUsedToday, setSlotsUsedToday] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCabin, setSelectedCabin] = useState(null);
@@ -36,6 +37,7 @@ export default function DashboardPage() {
       setBookingsLocked(cabinData.bookingsLocked || false);
       setBookingUnlockTime(cabinData.bookingUnlockTime || null);
       setActiveBookings(bookingData.bookings || []);
+      setSlotsUsedToday(bookingData.slotsUsedToday || 0);
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to load data');
@@ -146,12 +148,19 @@ export default function DashboardPage() {
           />
         ))}
 
+        {cabins.length > 0 && !bookingsLocked && (
+          <div style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-sm)', background: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+            <strong>Daily Quota:</strong> You have used {slotsUsedToday} of your 2 daily slots.
+            {slotsUsedToday >= 2 && <span style={{ color: 'var(--color-error)', marginLeft: 'var(--space-sm)' }}>(Quota limit reached)</span>}
+          </div>
+        )}
+
         <div className="cabin-grid">
           {cabins.map((cabin) => (
             <CabinCard
               key={cabin.id}
               cabin={cabin}
-              hasActiveBooking={false}
+              hasActiveBooking={slotsUsedToday >= 2}
               onBook={setSelectedCabin}
               bookingsLocked={bookingsLocked}
             />
@@ -184,6 +193,7 @@ export default function DashboardPage() {
             cabin={selectedCabin}
             onClose={() => setSelectedCabin(null)}
             onSuccess={handleBookSuccess}
+            remainingSlots={Math.max(0, 2 - slotsUsedToday)}
           />
         )}
       </main>

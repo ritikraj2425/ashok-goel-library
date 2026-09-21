@@ -40,7 +40,7 @@ async function getCabinStatusForStudents() {
     status: { $in: ACTIVE_STATUSES },
     bookingDate: todayDateStr
   })
-    .select('cabinId timeSlotId status')
+    .select('cabinId timeSlotId timeSlotIds status')
     .lean();
 
   // Map cabin ID to set of booked slot IDs and hold slot IDs
@@ -48,12 +48,18 @@ async function getCabinStatusForStudents() {
   const holdSlotsByCabin = {};
   for (const booking of activeBookings) {
     const cid = booking.cabinId.toString();
-    if (booking.status === 'pending') {
-      if (!holdSlotsByCabin[cid]) holdSlotsByCabin[cid] = new Set();
-      holdSlotsByCabin[cid].add(booking.timeSlotId);
-    } else {
-      if (!bookedSlotsByCabin[cid]) bookedSlotsByCabin[cid] = new Set();
-      bookedSlotsByCabin[cid].add(booking.timeSlotId);
+    // Use timeSlotIds if available, otherwise fall back to single timeSlotId
+    const slotIds = booking.timeSlotIds && booking.timeSlotIds.length > 0
+      ? booking.timeSlotIds
+      : [booking.timeSlotId];
+    for (const slotId of slotIds) {
+      if (booking.status === 'pending') {
+        if (!holdSlotsByCabin[cid]) holdSlotsByCabin[cid] = new Set();
+        holdSlotsByCabin[cid].add(slotId);
+      } else {
+        if (!bookedSlotsByCabin[cid]) bookedSlotsByCabin[cid] = new Set();
+        bookedSlotsByCabin[cid].add(slotId);
+      }
     }
   }
 
