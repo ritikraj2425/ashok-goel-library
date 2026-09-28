@@ -95,20 +95,7 @@ export default function AdminDashboardPage() {
 
   const showSuccess = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(''), 4000); };
 
-  const handleApprove = (id) => {
-    setConfirm({
-      title: 'Approve Booking',
-      message: 'Are you sure you want to approve this booking request? The slot will be reserved for this student.',
-      confirmLabel: 'Approve',
-      confirmClass: 'btn-success',
-      onConfirm: async () => {
-        await approveBooking(id);
-        setConfirm(null);
-        showSuccess('Booking approved successfully');
-        fetchData();
-      },
-    });
-  };
+
 
 
 
@@ -127,21 +114,7 @@ export default function AdminDashboardPage() {
     });
   };
 
-  const handleReject = (id) => {
-    setConfirm({
-      title: 'Reject Booking',
-      message: 'Are you sure you want to reject this booking request?',
-      confirmLabel: 'Reject',
-      confirmClass: 'btn-danger',
-      showReason: true,
-      onConfirm: async (reason) => {
-        await rejectBooking(id, reason);
-        setConfirm(null);
-        showSuccess('Booking rejected');
-        fetchData();
-      },
-    });
-  };
+
 
   const handleCancelByAdmin = (id) => {
     setConfirm({
@@ -205,51 +178,7 @@ export default function AdminDashboardPage() {
         {success && <div className="alert alert-success">{success}</div>}
         {error && <div className="alert alert-error">{error}</div>}
 
-        {/* ─── Section 1: Pending Requests ─── */}
-        <div className="dashboard-section">
-          <h3 className="section-title">Pending Requests ({data.pendingRequests.length})</h3>
-          {data.pendingRequests.length === 0 ? (
-            <div className="empty-state"><p>No pending requests</p></div>
-          ) : (
-            <div className="dashboard-grid">
-              {data.pendingRequests.map((booking) => (
-                <div key={booking._id} className="card booking-card">
-                  <div className="booking-card-header">
-                    <h4>{booking.cabinId?.name || 'Cabin'}</h4>
-                    <span className="badge badge-pending">Pending</span>
-                  </div>
-                  <div className="booking-card-details">
-                    <div className="booking-card-detail"><span className="label">Date</span>{booking.bookingDate}</div>
-                    <div className="booking-card-detail"><span className="label">Slot</span>{formatBookingTimeSlot(booking)}</div>
-                    <div className="booking-card-detail"><span className="label">Student</span>{booking.mainStudent.name} {renderUserTypeTag(booking)} {renderSlotCountTag(booking)}</div>
-                    <div className="booking-card-detail" title={booking.studentUserId?.email || '-'}><span className="label">Email</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booking.studentUserId?.email || '-'}</span></div>
-                    <div className="booking-card-detail"><span className="label">Enrollment</span>{booking.mainStudent.enrollmentNumber}</div>
-                    <div className="booking-card-detail"><span className="label">Phone</span>{booking.mainStudent.phoneNumber}</div>
-                    <div className="booking-card-detail"><span className="label">People</span>{booking.peopleCount}</div>
-                    {booking.groupMembers?.length > 0 && (
-                      <div className="booking-card-detail" style={{ flexDirection: 'column', gap: 4 }}>
-                        <span className="label">Group Members</span>
-                        {booking.groupMembers.map((m, i) => (
-                          <span key={i} style={{ fontSize: 'var(--font-size-xs)', paddingLeft: 'var(--space-sm)' }}>
-                            {m.name} ({m.enrollmentNumber})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="booking-card-detail">
-                      <span className="label">Auto-reject</span>
-                      <CountdownTimer targetDate={booking.approvalDeadlineAt} />
-                    </div>
-                  </div>
-                  <div className="booking-card-actions">
-                    <button className="btn btn-success btn-sm" onClick={() => handleApprove(booking._id)}>Approve</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleReject(booking._id)}>Reject</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+
 
 
 
@@ -422,27 +351,34 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent.name}</div>
-                    <div><strong>Enrollment:</strong> {detailBooking.mainStudent.enrollmentNumber}</div>
+
                     <div><strong>Phone:</strong> {detailBooking.mainStudent.phoneNumber}</div>
                     <div><strong>People Count:</strong> {detailBooking.peopleCount}</div>
-                    {detailBooking.groupMembers?.length > 0 && (
+                    {detailBooking.joinedMembers?.length > 0 ? (
+                      <div>
+                        <strong>Joined Members ({detailBooking.joinedMembers.length}):</strong>
+                        <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)' }}>
+                          {detailBooking.joinedMembers.map((m, i) => (
+                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}> {m.name} ({m.email})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : detailBooking.groupMembers?.length > 0 ? (
                       <div>
                         <strong>Group Members:</strong>
                         <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)' }}>
                           {detailBooking.groupMembers.map((m, i) => (
-                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}>{m.name} ({m.enrollmentNumber})</li>
+                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}>{m.name}</li>
                           ))}
                         </ul>
                       </div>
-                    )}
+                    ) : null}
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                     {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
                     <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
-                    {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                     {detailBooking.checkedInAt && <div><strong>Checked In:</strong> {new Date(detailBooking.checkedInAt).toLocaleString()}</div>}
                     {detailBooking.cancelRequestedAt && <div><strong>Cancel Requested:</strong> {new Date(detailBooking.cancelRequestedAt).toLocaleString()}</div>}
-                    {detailBooking.approvedBy && <div><strong>Approved By:</strong> {detailBooking.approvedBy.username}</div>}
                     {detailBooking.studentUserId && <div><strong>Account:</strong> {detailBooking.studentUserId.email}</div>}
                   </div>
                 )}

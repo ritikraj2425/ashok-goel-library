@@ -69,7 +69,7 @@ export default function AllUsersPage() {
             <input
               type="text"
               className="form-control"
-              placeholder="Search by name, email, or enrollment..."
+              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ width: '300px' }}
@@ -98,7 +98,6 @@ export default function AllUsersPage() {
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Enrollment No.</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -115,7 +114,6 @@ export default function AllUsersPage() {
                         <tr key={student._id}>
                           <td>{student.name}</td>
                           <td>{student.email}</td>
-                          <td>{student.enrollmentNumber || '-'}</td>
                           <td>{statusBadge}</td>
                         </tr>
                       );

@@ -114,4 +114,25 @@ export const cancelApprovedBooking = async (bookingId) => {
   });
 };
 
+// --- Group Join ---
+export async function getJoinInfo(token) {
+  return apiRequest(`/api/bookings/join-info/${token}`);
+}
+
+export async function joinGroupBooking(token) {
+  return apiRequest(`/api/bookings/join/${token}`, {
+    method: 'POST',
+  });
+}
+
+export async function getJoinStatus(bookingId) {
+  return apiRequest(`/api/bookings/${bookingId}/join-status`);
+}
+
+export async function cancelPendingMembers(bookingId) {
+  return apiRequest(`/api/bookings/${bookingId}/cancel-pending-members`, {
+    method: 'POST',
+  });
+}
+
 export { getToken, setToken, removeToken };

@@ -28,10 +28,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
-  enrollmentNumber: {
-    type: String,
-    trim: true,
-  },
   blockedUntil: {
     type: Date,
     default: null,
@@ -53,7 +49,6 @@ userSchema.methods.toPublic = function () {
     isBlocked: this.isBlocked,
     blockedUntil: this.blockedUntil,
     phoneNumber: this.phoneNumber,
-    enrollmentNumber: this.enrollmentNumber,
     createdAt: this.createdAt,
     lastLoginAt: this.lastLoginAt,
   };

@@ -84,14 +84,11 @@ router.get('/me', authStudent, (req, res) => {
  */
 router.put('/profile', authStudent, async (req, res, next) => {
   try {
-    const { phoneNumber, enrollmentNumber } = req.body;
+    const { phoneNumber } = req.body;
     
     // We only update what is provided
     if (phoneNumber !== undefined) {
       req.user.phoneNumber = phoneNumber.trim();
-    }
-    if (enrollmentNumber !== undefined) {
-      req.user.enrollmentNumber = enrollmentNumber.trim();
     }
     
     await req.user.save();

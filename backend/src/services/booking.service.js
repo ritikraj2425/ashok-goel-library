@@ -20,6 +20,11 @@ function createError(message, statusCode = 400) {
  * Create a new booking request.
  * Enforces ALL booking rules atomically.
  * Supports slotCount=1 (single) or slotCount=2 (two consecutive slots).
+ *
+ * New flow for students with peopleCount > 1:
+ * - Creates booking in PENDING_MEMBERS status with a joinToken.
+ * - Other members join via QR/link within 10 minutes.
+ * - Once all members join, booking auto-approves.
  */
 async function createBookingRequest(userId, body) {
   // Run cleanup first to clear expired bookings
@@ -113,43 +118,24 @@ async function createBookingRequest(userId, body) {
   // --- Normalize inputs ---
   const normalizedMain = {
     name: normalizeName(mainStudent.name),
-    enrollmentNumber: normalizeEnrollment(mainStudent.enrollmentNumber),
     phoneNumber: normalizePhone(mainStudent.phoneNumber),
   };
 
+  // For new flow (student, peopleCount > 1): no group members needed upfront
+  // For legacy/faculty flow: group members provided inline
   const normalizedGroupMembers = (groupMembers || []).map((m) => ({
     name: normalizeName(m.name),
-    enrollmentNumber: normalizeEnrollment(m.enrollmentNumber),
   }));
 
-  // --- Rule 10: 1 + groupMembers.length must equal peopleCount ---
-  if (1 + normalizedGroupMembers.length !== peopleCount) {
-    throw createError(
-      `Number of group members (${normalizedGroupMembers.length}) plus main student must equal people count (${peopleCount})`
-    );
-  }
-
-  // --- Rule 7: Main enrollment cannot be in group members ---
-  const mainEnrollment = normalizedMain.enrollmentNumber;
-  for (const member of normalizedGroupMembers) {
-    if (member.enrollmentNumber === mainEnrollment) {
-      throw createError('Main student enrollment number cannot also appear as a group member');
-    }
-  }
-
-  // --- Rule 6: No duplicate enrollment numbers in group ---
-  const enrollmentSet = new Set();
-  for (const member of normalizedGroupMembers) {
-    if (enrollmentSet.has(member.enrollmentNumber)) {
+  // Only enforce group member count for faculty or when groupMembers are explicitly provided
+  if (userType === 'faculty' && normalizedGroupMembers.length > 0) {
+    if (1 + normalizedGroupMembers.length !== peopleCount) {
       throw createError(
-        `Duplicate enrollment number in group: ${member.enrollmentNumber}`
+        `Number of group members (${normalizedGroupMembers.length}) plus main student must equal people count (${peopleCount})`
       );
     }
-    enrollmentSet.add(member.enrollmentNumber);
   }
 
-  // --- Collect all enrollment numbers for duplicate checks ---
-  const allEnrollments = [mainEnrollment, ...normalizedGroupMembers.map((m) => m.enrollmentNumber)];
 
   // --- Rule 11: Max 2 SLOTS per day per enrollment or account (sum slotCount) ---
   const todaysBookings = await Booking.find({
@@ -161,6 +147,7 @@ async function createBookingRequest(userId, body) {
             status: {
               $in: [
                 BOOKING_STATUS.PENDING,
+                BOOKING_STATUS.PENDING_MEMBERS,
                 BOOKING_STATUS.APPROVED,
                 BOOKING_STATUS.CANCEL_REQUESTED,
                 BOOKING_STATUS.AWAITING_CHECKIN,
@@ -175,12 +162,12 @@ async function createBookingRequest(userId, body) {
       {
         $or: [
           { studentUserId: userId },
-          { 'mainStudent.enrollmentNumber': { $in: allEnrollments } },
-          { 'groupMembers.enrollmentNumber': { $in: allEnrollments } },
+          { 'joinedMembers.studentUserId': userId },
+          { 'joinedMembers.studentUserId': userId },
         ]
       }
     ]
-  }).select('studentUserId mainStudent groupMembers slotCount').lean();
+  }).select('studentUserId mainStudent groupMembers joinedMembers slotCount').lean();
 
   const enrollmentSlotCounts = {};
   let userSlotCount = 0;
@@ -190,12 +177,12 @@ async function createBookingRequest(userId, body) {
     if (b.studentUserId && b.studentUserId.toString() === userId.toString()) {
       userSlotCount += bSlotCount;
     }
-    if (b.mainStudent?.enrollmentNumber) {
-      enrollmentSlotCounts[b.mainStudent.enrollmentNumber] = (enrollmentSlotCounts[b.mainStudent.enrollmentNumber] || 0) + bSlotCount;
-    }
-    for (const member of (b.groupMembers || [])) {
-      if (member.enrollmentNumber) {
-        enrollmentSlotCounts[member.enrollmentNumber] = (enrollmentSlotCounts[member.enrollmentNumber] || 0) + bSlotCount;
+    // Also count if user is a joined member in another booking
+    if (b.joinedMembers) {
+      for (const jm of b.joinedMembers) {
+        if (jm.studentUserId && jm.studentUserId.toString() === userId.toString()) {
+          userSlotCount += bSlotCount;
+        }
       }
     }
   }
@@ -204,12 +191,7 @@ async function createBookingRequest(userId, body) {
     throw createError(`Your account has already used ${userSlotCount} slot(s) for this day. You cannot book ${slotCount} more (max 2 slots per day).`);
   }
 
-  for (const enrollment of allEnrollments) {
-    const used = enrollmentSlotCounts[enrollment] || 0;
-    if (used + slotCount > 2) {
-      throw createError(`Enrollment number ${enrollment} has already used ${used} slot(s) today. Cannot book ${slotCount} more (max 2 slots per day).`);
-    }
-  }
+
 
   // --- Check all requested slots for conflicts ---
   for (const slotDetail of allSlotDetails) {
@@ -241,36 +223,7 @@ async function createBookingRequest(userId, body) {
       throw createError(`This cabin is already booked or requested for time slot ${slotDetail.id}`);
     }
 
-    // --- Rules 4, 5: Check enrollment numbers against THIS SLOT's active bookings ---
-    const enrollmentConflict = await Booking.findOne({
-      bookingDate: slotDetail.dateString,
-      status: { $in: ACTIVE_STATUSES },
-      $or: [
-        { timeSlotId: slotDetail.id },
-        { timeSlotIds: slotDetail.id },
-      ],
-      'mainStudent.enrollmentNumber': { $in: allEnrollments },
-    });
-    if (!enrollmentConflict) {
-      const groupEnrollmentConflict = await Booking.findOne({
-        bookingDate: slotDetail.dateString,
-        status: { $in: ACTIVE_STATUSES },
-        $or: [
-          { timeSlotId: slotDetail.id },
-          { timeSlotIds: slotDetail.id },
-        ],
-        'groupMembers.enrollmentNumber': { $in: allEnrollments },
-      });
-      if (groupEnrollmentConflict) {
-        throw createError(
-          `One or more enrollment numbers are already part of an active booking for time slot ${slotDetail.id}`
-        );
-      }
-    } else {
-      throw createError(
-        `One or more enrollment numbers are already part of an active booking for time slot ${slotDetail.id}`
-      );
-    }
+
 
     // --- Rule 8: Phone number cannot be in another active booking for THIS SLOT ---
     const phoneConflict = await Booking.findOne({
@@ -289,7 +242,12 @@ async function createBookingRequest(userId, body) {
 
   // --- Create the booking ---
   const requestTime = new Date();
-  const booking = await Booking.create({
+
+  // Determine initial status based on user type and people count
+  const isGroupBooking = userType === 'student' && peopleCount > 1;
+  const crypto = require('crypto');
+
+  const bookingData = {
     cabinId: cabin._id,
     studentUserId: userId,
     userType,
@@ -302,16 +260,29 @@ async function createBookingRequest(userId, body) {
     slotCount,
     startTime: primarySlotDetails.startTime,
     endTime: mergedEndTime,
-    status: BOOKING_STATUS.PENDING,
     requestedAt: requestTime,
-    approvalDeadlineAt: new Date(requestTime.getTime() + TIMING.PENDING_TIMEOUT_MS),
-    checkInDeadlineAt: new Date(
+  };
+
+  if (isGroupBooking) {
+    // New flow: PENDING_MEMBERS with join token
+    bookingData.status = BOOKING_STATUS.PENDING_MEMBERS;
+    bookingData.joinToken = crypto.randomBytes(16).toString('hex');
+    bookingData.joinExpiresAt = new Date(requestTime.getTime() + TIMING.JOIN_EXPIRY_MS);
+    bookingData.joinedMembers = [];
+    bookingData.groupMembers = []; // Clear legacy group members for new flow
+  } else {
+    // Solo booking or faculty: auto approve
+    bookingData.status = BOOKING_STATUS.APPROVED;
+    bookingData.approvedAt = requestTime;
+    bookingData.checkInDeadlineAt = new Date(
       Math.min(
         Math.max(now.getTime(), primarySlotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
         mergedEndTime.getTime()
       )
-    ),
-  });
+    );
+  }
+
+  const booking = await Booking.create(bookingData);
 
   return booking;
 }
@@ -324,7 +295,10 @@ async function getMyActiveBookings(userId) {
   await runCleanup();
 
   const bookings = await Booking.find({
-    studentUserId: userId,
+    $or: [
+      { studentUserId: userId },
+      { 'joinedMembers.studentUserId': userId },
+    ],
     status: { $in: ACTIVE_STATUSES },
   })
     .populate('cabinId', 'code name')
@@ -334,23 +308,23 @@ async function getMyActiveBookings(userId) {
   const today = new Date();
   const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todaysBookings = await Booking.find({
-    studentUserId: userId,
     bookingDate: dateString,
     $or: [
-      {
-        status: {
-          $in: [
-            BOOKING_STATUS.PENDING,
-            BOOKING_STATUS.APPROVED,
-            BOOKING_STATUS.CANCEL_REQUESTED,
-            BOOKING_STATUS.AWAITING_CHECKIN,
-            BOOKING_STATUS.CHECKED_IN,
-            BOOKING_STATUS.COMPLETED,
-            BOOKING_STATUS.EARLY_CHECKOUT,
-          ],
-        },
-      }
-    ]
+      { studentUserId: userId },
+      { 'joinedMembers.studentUserId': userId },
+    ],
+    status: {
+      $in: [
+        BOOKING_STATUS.PENDING,
+        BOOKING_STATUS.PENDING_MEMBERS,
+        BOOKING_STATUS.APPROVED,
+        BOOKING_STATUS.CANCEL_REQUESTED,
+        BOOKING_STATUS.AWAITING_CHECKIN,
+        BOOKING_STATUS.CHECKED_IN,
+        BOOKING_STATUS.COMPLETED,
+        BOOKING_STATUS.EARLY_CHECKOUT,
+      ],
+    },
   }).select('slotCount').lean();
 
   const slotsUsedToday = todaysBookings.reduce((sum, b) => sum + (b.slotCount || 1), 0);
@@ -366,14 +340,22 @@ async function getMyBookingHistory(userId, page = 1, limit = 20) {
 
   const skip = (page - 1) * limit;
 
+  const query = {
+    $or: [
+      { studentUserId: userId },
+      { 'joinedMembers.studentUserId': userId },
+    ]
+  };
+
   const [bookings, total] = await Promise.all([
-    Booking.find({ studentUserId: userId })
+    Booking.find(query)
       .sort({ requestedAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate('cabinId', 'code name')
+      .populate('studentUserId', 'name email')
       .lean(),
-    Booking.countDocuments({ studentUserId: userId }),
+    Booking.countDocuments(query),
   ]);
 
   return { bookings, total, page, totalPages: Math.ceil(total / limit) };
@@ -414,6 +396,9 @@ async function cancelPendingByStudent(bookingId, userId) {
     if (existing.status === BOOKING_STATUS.APPROVED) {
       throw createError('Approved bookings cannot be cancelled directly. Use "Request Cancellation" instead.');
     }
+    if (existing.status === BOOKING_STATUS.CANCELLED_BY_STUDENT) {
+      return existing; // Idempotent
+    }
     throw createError(`Cannot cancel booking with status: ${existing.status}`);
   }
 
@@ -453,6 +438,9 @@ async function cancelApprovedByStudent(bookingId, userId) {
     }
     if (existing.startTime <= now) {
       throw createError('You cannot cancel a booking after its time slot has started');
+    }
+    if (existing.status === BOOKING_STATUS.CANCELLED_BY_STUDENT) {
+      return existing; // Idempotent
     }
     throw createError(`Cannot cancel booking with status: ${existing.status}`);
   }
@@ -797,12 +785,8 @@ async function getAdminDashboard() {
     allActiveTodayBookings,
     cabins,
   ] = await Promise.all([
-    // 1. Pending approval
-    Booking.find({ status: BOOKING_STATUS.PENDING })
-      .populate('cabinId', 'code name')
-      .populate('studentUserId', 'email name')
-      .sort({ requestedAt: 1 })
-      .lean(),
+    // 1. Pending approval (removed, now auto-approved)
+    Promise.resolve([]),
 
     // 2. Awaiting check-in (slot started, need admin check-in)
     Booking.find({ status: BOOKING_STATUS.AWAITING_CHECKIN })
@@ -895,6 +879,302 @@ async function getBookingById(bookingId) {
   return booking;
 }
 
+/**
+ * Join a group booking via invite token.
+ * Atomically adds the joining user to the booking's joinedMembers array.
+ * If the group is now full, auto-approves the booking.
+ */
+async function joinGroupBooking(token, userId) {
+  await runCleanup();
+
+  const user = await User.findById(userId);
+  if (!user) throw createError('User not found', 404);
+
+  if (user.isBlocked) {
+    throw createError('Your account is permanently blocked. You cannot join group bookings.', 403);
+  }
+
+  if (user.blockedUntil && user.blockedUntil > new Date()) {
+    throw createError(`Your account is temporarily blocked until ${user.blockedUntil.toLocaleString()}.`, 403);
+  }
+
+  // Look up the booking by token
+  const booking = await Booking.findOne({
+    joinToken: token,
+    status: BOOKING_STATUS.PENDING_MEMBERS,
+  }).populate('cabinId', 'code name').lean();
+
+  if (!booking) {
+    // Check if this was a valid token that was already used up
+    const expiredBooking = await Booking.findOne({ joinToken: token });
+    if (expiredBooking) {
+      if (expiredBooking.status === BOOKING_STATUS.APPROVED) {
+        throw createError('This booking group is already full and has been confirmed.', 410);
+      }
+      throw createError('This invite link has expired.', 410);
+    }
+    // Also check if the token was cleared (booking approved)
+    const completedBooking = await Booking.findOne({
+      joinedMembers: { $elemMatch: { studentUserId: userId } },
+      status: { $in: [BOOKING_STATUS.APPROVED, BOOKING_STATUS.AWAITING_CHECKIN, BOOKING_STATUS.CHECKED_IN] }
+    });
+    if (completedBooking) {
+      throw createError('This booking has already been confirmed.', 410);
+    }
+    throw createError('Invalid or expired invite link.', 404);
+  }
+
+  // Check if invite has expired
+  if (booking.joinExpiresAt && new Date() > new Date(booking.joinExpiresAt)) {
+    throw createError('This invite link has expired. The 10-minute window has passed.', 410);
+  }
+
+  // Host cannot join their own booking
+  if (booking.studentUserId.toString() === userId.toString()) {
+    throw createError('You cannot join your own booking. Share this link with your group members.', 400);
+  }
+
+  // Check if user is already in the group
+  const alreadyJoined = booking.joinedMembers.some(
+    m => m.studentUserId && m.studentUserId.toString() === userId.toString()
+  );
+  if (alreadyJoined) {
+    throw createError('You have already joined this booking.', 400);
+  }
+
+  // Check remaining slot quota for the joining user
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const joinerTodaysBookings = await Booking.find({
+    bookingDate: dateString,
+    $or: [
+      { studentUserId: userId },
+      { 'joinedMembers.studentUserId': userId },
+    ],
+    status: {
+      $in: [
+        BOOKING_STATUS.PENDING,
+        BOOKING_STATUS.PENDING_MEMBERS,
+        BOOKING_STATUS.APPROVED,
+        BOOKING_STATUS.CANCEL_REQUESTED,
+        BOOKING_STATUS.AWAITING_CHECKIN,
+        BOOKING_STATUS.CHECKED_IN,
+        BOOKING_STATUS.COMPLETED,
+        BOOKING_STATUS.EARLY_CHECKOUT,
+      ],
+    },
+  }).select('slotCount').lean();
+
+  const joinerSlotsUsed = joinerTodaysBookings.reduce((sum, b) => sum + (b.slotCount || 1), 0);
+  const bookingSlotCount = booking.slotCount || 1;
+
+  if (joinerSlotsUsed + bookingSlotCount > 2) {
+    throw createError(
+      `You have already used ${joinerSlotsUsed} slot(s) today. This booking requires ${bookingSlotCount} slot(s), which exceeds your daily limit of 2.`,
+      400
+    );
+  }
+
+  // Check if user has a conflicting booking for the same time slots
+  const bookingSlots = (booking.timeSlotIds && booking.timeSlotIds.length > 0) ? booking.timeSlotIds : [booking.timeSlotId];
+  for (const slotId of bookingSlots) {
+    const conflict = await Booking.findOne({
+      bookingDate: booking.bookingDate,
+      status: { $in: ACTIVE_STATUSES },
+      $and: [
+        {
+          $or: [
+            { studentUserId: userId },
+            { 'joinedMembers.studentUserId': userId },
+          ]
+        },
+        {
+          $or: [
+            { timeSlotId: slotId },
+            { timeSlotIds: slotId },
+          ]
+        }
+      ]
+    });
+    if (conflict) {
+      throw createError(`You already have an active booking for time slot ${slotId}.`, 400);
+    }
+  }
+
+  // Atomic update: push to joinedMembers only if capacity not exceeded
+  const requiredMembers = booking.peopleCount - 1;
+  const now = new Date();
+
+  const updatedBooking = await Booking.findOneAndUpdate(
+    {
+      _id: booking._id,
+      joinToken: token,
+      status: BOOKING_STATUS.PENDING_MEMBERS,
+      joinExpiresAt: { $gt: now },
+      $expr: { $lt: [{ $size: { $ifNull: ['$joinedMembers', []] } }, requiredMembers] }
+    },
+    {
+      $push: {
+        joinedMembers: {
+          studentUserId: userId,
+          name: user.name,
+          email: user.email,
+          joinedAt: now,
+        }
+      }
+    },
+    { new: true }
+  );
+
+  if (!updatedBooking) {
+    throw createError('Unable to join. The group may be full or the invite has expired.', 400);
+  }
+
+  // Check if group is now full -> auto-approve
+  if (updatedBooking.joinedMembers.length >= requiredMembers) {
+    const approvalTime = new Date();
+    const checkInDeadline = new Date(
+      Math.min(
+        Math.max(approvalTime.getTime(), updatedBooking.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
+        updatedBooking.endTime.getTime()
+      )
+    );
+
+    await Booking.findByIdAndUpdate(updatedBooking._id, {
+      $set: {
+        status: BOOKING_STATUS.APPROVED,
+        approvedAt: approvalTime,
+        checkInDeadlineAt: checkInDeadline,
+        expiresAt: updatedBooking.endTime,
+      },
+      $unset: {
+        joinToken: 1,
+        joinExpiresAt: 1,
+      }
+    });
+
+    return {
+      booking: { ...updatedBooking.toObject ? updatedBooking.toObject() : updatedBooking, status: BOOKING_STATUS.APPROVED },
+      groupFull: true,
+      message: 'You have joined the group! The booking has been automatically approved.',
+    };
+  }
+
+  return {
+    booking: updatedBooking,
+    groupFull: false,
+    message: `You have joined the group! Waiting for ${requiredMembers - updatedBooking.joinedMembers.length} more member(s).`,
+  };
+}
+
+/**
+ * Get the join status for a booking (used by host for polling).
+ */
+async function getJoinStatus(bookingId, userId) {
+  await runCleanup();
+
+  const booking = await Booking.findOne({
+    _id: bookingId,
+    $or: [
+      { studentUserId: userId },
+      { 'joinedMembers.studentUserId': userId },
+    ]
+  }).populate('cabinId', 'code name').lean();
+
+  if (!booking) {
+    throw createError('Booking not found', 404);
+  }
+
+  return {
+    status: booking.status,
+    joinedCount: (booking.joinedMembers || []).length,
+    totalNeeded: booking.peopleCount - 1,
+    joinedMembers: (booking.joinedMembers || []).map(m => ({ name: m.name, email: m.email, joinedAt: m.joinedAt })),
+    joinToken: booking.joinToken,
+    joinExpiresAt: booking.joinExpiresAt,
+  };
+}
+
+/**
+ * Get join info for a token (public view for the join page).
+ */
+async function getJoinInfo(token) {
+  const booking = await Booking.findOne({ joinToken: token })
+    .populate('cabinId', 'code name')
+    .populate('studentUserId', 'name email')
+    .lean();
+
+  if (!booking) {
+    throw createError('Invalid or expired invite link.', 404);
+  }
+
+  if (booking.status !== BOOKING_STATUS.PENDING_MEMBERS) {
+    if (booking.status === BOOKING_STATUS.APPROVED) {
+      throw createError('This booking group is already full and has been confirmed.', 410);
+    }
+    throw createError('This invite link is no longer valid.', 410);
+  }
+
+  if (booking.joinExpiresAt && new Date() > new Date(booking.joinExpiresAt)) {
+    throw createError('This invite link has expired. The 10-minute window has passed.', 410);
+  }
+
+  const requiredMembers = booking.peopleCount - 1;
+  const joinedCount = (booking.joinedMembers || []).length;
+
+  return {
+    hostName: booking.studentUserId?.name || booking.mainStudent?.name || 'Unknown',
+    cabinName: booking.cabinId?.name || 'Unknown Cabin',
+    cabinCode: booking.cabinId?.code || '',
+    bookingDate: booking.bookingDate,
+    timeSlotIds: booking.timeSlotIds,
+    slotCount: booking.slotCount,
+    peopleCount: booking.peopleCount,
+    joinedCount,
+    spotsRemaining: requiredMembers - joinedCount,
+    joinExpiresAt: booking.joinExpiresAt,
+  };
+}
+
+/**
+ * Cancel a PENDING_MEMBERS booking by the host.
+ * Does NOT count as a strike since it was never approved.
+ */
+async function cancelPendingMembers(bookingId, userId) {
+  await runCleanup();
+
+  const now = new Date();
+  const booking = await Booking.findOneAndUpdate(
+    {
+      _id: bookingId,
+      studentUserId: userId,
+      status: BOOKING_STATUS.PENDING_MEMBERS,
+    },
+    {
+      $set: {
+        status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
+        cancelledAt: now,
+      },
+      $unset: {
+        joinToken: 1,
+        joinExpiresAt: 1,
+      }
+    },
+    { new: true }
+  );
+
+  if (!booking) {
+    const existing = await Booking.findById(bookingId);
+    if (!existing) throw createError('Booking not found', 404);
+    if (existing.studentUserId.toString() !== userId.toString()) {
+      throw createError('You can only cancel your own bookings', 403);
+    }
+    throw createError(`Cannot cancel booking with status: ${existing.status}`);
+  }
+
+  return booking;
+}
+
 module.exports = {
   createBookingRequest,
   getMyActiveBookings,
@@ -909,6 +1189,10 @@ module.exports = {
   getAdminDashboard,
   getBookingById,
   createAdminBooking,
+  joinGroupBooking,
+  getJoinStatus,
+  getJoinInfo,
+  cancelPendingMembers,
 };
 
 /**
@@ -958,7 +1242,6 @@ async function createAdminBooking(adminId, adminUsername, body) {
     userType: 'faculty', // Bypass schema changes by using faculty mode
     mainStudent: {
       name: `Admin: ${adminUsername}`,
-      enrollmentNumber: 'ADMIN',
       phoneNumber: 'N/A'
     },
     groupMembers: [],

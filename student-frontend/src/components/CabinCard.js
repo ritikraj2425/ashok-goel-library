@@ -47,7 +47,7 @@ export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLoc
                   padding: '4px 8px', 
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--color-warning)'
-                }} title="Currently on hold pending admin approval">
+                }} title="Currently on hold (waiting for group members to join)">
                   {slot.label} (Hold)
                 </span>
               ))}

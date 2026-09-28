@@ -32,7 +32,7 @@ export default function Sidebar() {
       <div className="mobile-topbar">
         <div className="mobile-brand">Ashok Goel Library</div>
         <button className="mobile-menu-btn" onClick={() => setIsOpen(!isOpen)}>
-          ☰
+          
         </button>
       </div>
 

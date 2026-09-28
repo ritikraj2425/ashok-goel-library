@@ -52,9 +52,7 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
   if (search) {
     filter.$or = [
       { 'mainStudent.name': { $regex: search, $options: 'i' } },
-      { 'mainStudent.enrollmentNumber': search },
-      { 'groupMembers.name': { $regex: search, $options: 'i' } },
-      { 'groupMembers.enrollmentNumber': search }
+      { 'groupMembers.name': { $regex: search, $options: 'i' } }
     ];
   }
 
@@ -81,8 +79,10 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
     counts.total += 1;
     counts[b.status] = (counts[b.status] || 0) + 1;
     
-    studentCounts.total += b.peopleCount || 0;
-    studentCounts[b.status] = (studentCounts[b.status] || 0) + (b.peopleCount || 0);
+    if (!b.isExpanded || b.expandedSlotIndex === 0) {
+      studentCounts.total += b.peopleCount || 0;
+      studentCounts[b.status] = (studentCounts[b.status] || 0) + (b.peopleCount || 0);
+    }
 
     const isUsage = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED, BOOKING_STATUS.AWAITING_CHECKIN, BOOKING_STATUS.CHECKED_IN, BOOKING_STATUS.CANCELLED_BY_ADMIN, BOOKING_STATUS.EARLY_CHECKOUT].includes(b.status);
     
@@ -100,7 +100,9 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
       }
       cabinUsageMap[cid].bookingCount += 1;
       cabinUsageMap[cid].totalSlots += 1;
-      cabinUsageMap[cid].totalPeople += b.peopleCount || 0;
+      if (!b.isExpanded || b.expandedSlotIndex === 0) {
+        cabinUsageMap[cid].totalPeople += b.peopleCount || 0;
+      }
 
       const slot = b.timeSlotId;
       if (slot) {
@@ -165,9 +167,7 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   if (search) {
     filter.$or = [
       { 'mainStudent.name': { $regex: search, $options: 'i' } },
-      { 'mainStudent.enrollmentNumber': search },
-      { 'groupMembers.name': { $regex: search, $options: 'i' } },
-      { 'groupMembers.enrollmentNumber': search }
+      { 'groupMembers.name': { $regex: search, $options: 'i' } }
     ];
   }
 
@@ -216,9 +216,7 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
   if (search) {
     filter.$or = [
       { 'mainStudent.name': { $regex: search, $options: 'i' } },
-      { 'mainStudent.enrollmentNumber': search },
       { 'groupMembers.name': { $regex: search, $options: 'i' } },
-      { 'groupMembers.enrollmentNumber': search },
     ];
   }
 
@@ -247,14 +245,19 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     cabin: { header: 'Cabin', extract: (b) => b.cabinId?.name || '' },
     cabin_code: { header: 'Cabin Code', extract: (b) => b.cabinId?.code || '' },
     student_name: { header: 'Student Name', extract: (b) => b.mainStudent?.name || '' },
-    enrollment: { header: 'Enrollment No.', extract: (b) => b.mainStudent?.enrollmentNumber || '' },
+    enrollment_no: { header: 'Enrollment No', extract: (b) => b.mainStudent?.enrollmentNumber || '' },
+    
     phone: { header: 'Phone', extract: (b) => b.mainStudent?.phoneNumber || '' },
     email: { header: 'Email', extract: (b) => b.studentUserId?.email || '' },
     people_count: { header: 'People Count', extract: (b) => b.peopleCount || '' },
     group_members: {
       header: 'Group Members',
-      extract: (b) =>
-        (b.groupMembers || []).map((m) => `${m.name} (${m.enrollmentNumber})`).join('; '),
+      extract: (b) => {
+        if (b.joinedMembers && b.joinedMembers.length > 0) {
+          return b.joinedMembers.map((m) => `${m.name} (${m.email})`).join('; ');
+        }
+        return (b.groupMembers || []).map((m) => m.name).join('; ');
+      },
     },
     status: {
       header: 'Status',

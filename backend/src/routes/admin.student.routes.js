@@ -22,7 +22,6 @@ router.get('/', async (req, res, next) => {
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { enrollmentNumber: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } }
       ];
     }
@@ -69,7 +68,7 @@ router.get('/blocked', async (req, res, next) => {
 
     const [blockedStudents, total] = await Promise.all([
       User.find(filter)
-        .select('name email enrollmentNumber isBlocked blockedUntil')
+        .select('name email isBlocked blockedUntil')
         .skip(skip)
         .limit(limitNum)
         .lean(),

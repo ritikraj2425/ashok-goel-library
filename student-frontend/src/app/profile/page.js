@@ -10,7 +10,6 @@ export default function ProfilePage() {
   const { user, loading: authLoading, login } = useAuth();
   const [formData, setFormData] = useState({
     phoneNumber: '',
-    enrollmentNumber: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +19,6 @@ export default function ProfilePage() {
     if (user) {
       setFormData({
         phoneNumber: user.phoneNumber || '',
-        enrollmentNumber: user.enrollmentNumber || '',
       });
     }
   }, [user]);
@@ -78,27 +76,17 @@ export default function ProfilePage() {
               />
               <small style={{ color: 'var(--color-text-muted)', marginTop: '4px' }}>Name is synced from your Google account.</small>
             </div>
-            
+
             <div className="form-group">
               <label className="form-label">Email</label>
               <input 
-                type="text" 
+                type="email" 
                 className="form-input" 
                 value={user.email} 
                 disabled 
                 style={{ backgroundColor: 'var(--color-bg-hover)' }}
               />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Enrollment Number (Optional)</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={formData.enrollmentNumber} 
-                onChange={(e) => setFormData(prev => ({ ...prev, enrollmentNumber: e.target.value }))}
-                placeholder="e.g. 123456"
-              />
+              <small style={{ color: 'var(--color-text-muted)', marginTop: '4px' }}>Email is synced from your Google account.</small>
             </div>
 
             <div className="form-group">

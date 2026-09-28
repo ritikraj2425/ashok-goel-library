@@ -168,7 +168,7 @@ export default function MyBookingsPage() {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                <div><strong>Cabin:</strong> {selectedBooking.cabinId?.name} ({selectedBooking.cabinId?.code})</div>
+                <div><strong>Cabin:</strong> {selectedBooking.cabinId?.name}</div>
                 <div><strong>Date:</strong> {selectedBooking.bookingDate}</div>
                 <div><strong>Slot:</strong> {formatBookingTimeSlot(selectedBooking)}</div>
                 <div><strong>Status:</strong> <StatusBadge status={selectedBooking.status} /></div>
@@ -180,19 +180,23 @@ export default function MyBookingsPage() {
                 
                 {(selectedBooking.rejectionReason || selectedBooking.cancellationReason) && (
                   <div>
-                    <strong>Remarks:</strong>{' '}
+                    <strong>Reason:</strong>{' '}
                     <span style={{ color: 'var(--color-text-secondary)' }}>
                       {selectedBooking.rejectionReason || selectedBooking.cancellationReason}
                     </span>
                   </div>
                 )}
 
-                {selectedBooking.groupMembers && selectedBooking.groupMembers.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--space-sm) 0' }}></div>
+                
+                <div><strong>Booked By:</strong> {selectedBooking.studentUserId?.name || selectedBooking.mainStudent?.name} ({selectedBooking.studentUserId?.email || 'N/A'})</div>
+
+                {selectedBooking.joinedMembers && selectedBooking.joinedMembers.length > 0 && (
                   <div>
-                    <strong>Group Members:</strong>
+                    <strong>Joined Members:</strong>
                     <ul style={{ paddingLeft: '20px', marginTop: 'var(--space-xs)' }}>
-                      {selectedBooking.groupMembers.map((m, i) => (
-                        <li key={i}>{m.name} ({m.enrollmentNumber})</li>
+                      {selectedBooking.joinedMembers.map((m, i) => (
+                        <li key={i}>{m.name} ({m.email})</li>
                       ))}
                     </ul>
                   </div>

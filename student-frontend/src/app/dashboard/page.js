@@ -65,7 +65,7 @@ export default function DashboardPage() {
 
   const handleBookSuccess = () => {
     setSelectedCabin(null);
-    setSuccessMessage('Booking request submitted successfully. Awaiting admin approval.');
+    setSuccessMessage('Booking request created successfully.');
     fetchData();
     setTimeout(() => setSuccessMessage(''), 5000);
   };
@@ -191,7 +191,10 @@ export default function DashboardPage() {
         {selectedCabin && (
           <BookingModal
             cabin={selectedCabin}
-            onClose={() => setSelectedCabin(null)}
+            onClose={() => {
+              setSelectedCabin(null);
+              fetchData();
+            }}
             onSuccess={handleBookSuccess}
             remainingSlots={Math.max(0, 2 - slotsUsedToday)}
           />

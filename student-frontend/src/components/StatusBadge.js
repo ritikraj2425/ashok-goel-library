@@ -6,6 +6,7 @@ export default function StatusBadge({ status }) {
     pending_approval: { label: 'Pending Approval', className: 'badge-pending' },
     booked: { label: 'Booked', className: 'badge-booked' },
     inactive: { label: 'Inactive', className: 'badge-inactive' },
+    pending_members: { label: 'Waiting for Group', className: 'badge-warning' },
     pending: { label: 'On Hold', className: 'badge-pending' },
     approved: { label: 'Approved', className: 'badge-available' },
     cancel_requested: { label: 'Cancel Requested', className: 'badge-warning' },
@@ -15,7 +16,8 @@ export default function StatusBadge({ status }) {
     rejected: { label: 'Rejected', className: 'badge-rejected' },
     auto_rejected: { label: 'Auto-Rejected', className: 'badge-rejected' },
     cancelled_by_student: { label: 'User Cancelled', className: 'badge-inactive' },
-    cancelled_by_admin: { label: 'Early Checkout', className: 'badge-inactive' },
+    cancelled_by_admin: { label: 'Admin Cancelled', className: 'badge-rejected' },
+    early_checkout: { label: 'Early Checkout', className: 'badge-inactive' },
     completed: { label: 'Completed', className: 'badge-completed' },
   };
 

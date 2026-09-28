@@ -17,19 +17,25 @@ async function runCleanup() {
   const now = new Date();
 
   try {
-    // --- Job 1: Auto-reject expired pending requests ---
-    const autoRejected = await Booking.updateMany(
+    // --- Job 0: Auto-reject expired PENDING_MEMBERS (group join timeout) ---
+    const expiredPendingMembers = await Booking.updateMany(
       {
-        status: BOOKING_STATUS.PENDING,
-        approvalDeadlineAt: { $lt: now },
+        status: BOOKING_STATUS.PENDING_MEMBERS,
+        joinExpiresAt: { $lt: now },
       },
       {
         $set: {
           status: BOOKING_STATUS.AUTO_REJECTED,
           rejectedAt: now,
+          rejectionReason: 'Group invitation expired not enough members joined within 10 minutes.',
         },
+        $unset: {
+          joinToken: 1,
+        }
       }
     );
+
+
 
     // --- Job 2: Transition to AWAITING_CHECKIN when slot starts ---
     const awaitingCheckin = await Booking.updateMany(
@@ -111,14 +117,14 @@ async function runCleanup() {
     );
 
     const totalTransitions =
-      autoRejected.modifiedCount +
+      expiredPendingMembers.modifiedCount +
       awaitingCheckin.modifiedCount +
       noShowBookings.length +
       completed.modifiedCount;
 
     if (totalTransitions > 0) {
       console.log(
-        `Cleanup: ${autoRejected.modifiedCount} auto-rejected, ` +
+        `Cleanup: ${expiredPendingMembers.modifiedCount} expired group invites, ` +
         `${awaitingCheckin.modifiedCount} → awaiting check-in, ` +
         `${noShowBookings.length} no-show, ` +
         `${completed.modifiedCount} completed`

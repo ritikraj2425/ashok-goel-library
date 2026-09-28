@@ -15,6 +15,7 @@ const BOOKING_STATUS = {
   EARLY_CHECKOUT: 'early_checkout',
   COMPLETED: 'completed',
   NO_SHOW: 'no_show',
+  PENDING_MEMBERS: 'pending_members',
 };
 
 // Statuses that occupy a cabin slot (block new bookings for same slot)
@@ -24,6 +25,7 @@ const ACTIVE_STATUSES = [
   BOOKING_STATUS.CANCEL_REQUESTED,
   BOOKING_STATUS.AWAITING_CHECKIN,
   BOOKING_STATUS.CHECKED_IN,
+  BOOKING_STATUS.PENDING_MEMBERS,
 ];
 
 const ADMIN_ROLES = {
@@ -35,6 +37,7 @@ const ADMIN_ROLES = {
 const TIMING = {
   PENDING_TIMEOUT_MS: 15 * 60 * 1000,       // 15 minutes for admin approval
   CHECKIN_TIMEOUT_MS: 10 * 60 * 1000,        // 10 minutes for admin check-in
+  JOIN_EXPIRY_MS: 10 * 60 * 1000,            // 10 minutes for group members to join
   BLOCK_DURATION_MS: 2 * 24 * 60 * 60 * 1000, // 2 days block for no-show
   CLEANUP_INTERVAL_MS: 60 * 1000,            // 1 minute
   STUDENT_POLL_INTERVAL_MS: 20 * 1000,       // 20 seconds

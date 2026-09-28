@@ -53,7 +53,7 @@ async function getCabinStatusForStudents() {
       ? booking.timeSlotIds
       : [booking.timeSlotId];
     for (const slotId of slotIds) {
-      if (booking.status === 'pending') {
+      if (booking.status === 'pending' || booking.status === 'pending_members') {
         if (!holdSlotsByCabin[cid]) holdSlotsByCabin[cid] = new Set();
         holdSlotsByCabin[cid].add(slotId);
       } else {

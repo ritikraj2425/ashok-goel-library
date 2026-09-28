@@ -46,6 +46,7 @@ const formatBookingTimeSlot = (booking) => {
 
 const statusMap = {
   pending: { label: 'Pending', className: 'badge-pending' },
+  pending_members: { label: 'Waiting for Group', className: 'badge-warning' },
   approved: { label: 'Approved', className: 'badge-available' },
 
   awaiting_checkin: { label: 'Awaiting Check-in', className: 'badge-warning' },
@@ -74,7 +75,6 @@ export default function AnalyticsPage() {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalStudentsInModal, setTotalStudentsInModal] = useState(0);
 
   const [detailBooking, setDetailBooking] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -88,7 +88,7 @@ export default function AnalyticsPage() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadColumns, setDownloadColumns] = useState({
-    date: true, slot: true, cabin: true, student_name: true, enrollment: true,
+    date: true, slot: true, cabin: true, student_name: true, enrollment_no: false,
     phone: true, email: false, people_count: false, group_members: false,
     status: true, requested_at: false, approved_at: false, checked_in_at: false,
     completed_at: false, cancellation_reason: false,
@@ -97,7 +97,7 @@ export default function AnalyticsPage() {
 
   const COLUMN_LABELS = {
     date: 'Date', slot: 'Time Slot', cabin: 'Cabin', student_name: 'Student Name',
-    enrollment: 'Enrollment No.', phone: 'Phone', email: 'Email',
+    enrollment_no: 'Enrollment No', phone: 'Phone', email: 'Email',
     people_count: 'People Count', group_members: 'Group Members', status: 'Status',
     requested_at: 'Requested At', approved_at: 'Approved At',
     checked_in_at: 'Checked In At', completed_at: 'Completed At',
@@ -138,7 +138,6 @@ export default function AnalyticsPage() {
       const data = await getAnalyticsBookings(params);
       setStatusBookings(data.bookings || []);
       setTotalPages(data.totalPages || 1);
-      setTotalStudentsInModal(data.totalStudents || 0);
     } catch (e) {
       console.error(e);
       alert(e.message);
@@ -213,7 +212,7 @@ export default function AnalyticsPage() {
     bookingDate: new Date().toISOString().split('T')[0],
     timeSlotId: '09:30-10:30',
     cabinId: { name: 'Demo Cabin' },
-    mainStudent: { name: 'John Doe', enrollmentNumber: '123456', phoneNumber: '9876543210' },
+    mainStudent: { name: 'John Doe', phoneNumber: '9876543210' },
     studentUserId: { email: 'john.doe@example.com' },
     peopleCount: 3,
     groupMembers: [{ name: 'Jane Doe' }, { name: 'Jim Doe' }],
@@ -262,7 +261,7 @@ export default function AnalyticsPage() {
             </select>
             <input
               type="text"
-              placeholder="Search by name or enrollment..."
+              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -296,6 +295,11 @@ export default function AnalyticsPage() {
             <div className="stat-label">User Cancelled</div>
             {studentCounts.cancelled_by_student > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.cancelled_by_student} Students</div>}
           </div>
+          <div className="card stat-card" style={{ cursor: counts.auto_rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('auto_rejected', counts.auto_rejected)}>
+            <div className="stat-value">{counts.auto_rejected || 0}</div>
+            <div className="stat-label">Auto Rejected</div>
+            {studentCounts.auto_rejected > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.auto_rejected} Students</div>}
+          </div>
           <div className="card stat-card" style={{ cursor: counts.no_show > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('no_show', counts.no_show)}>
             <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.no_show || 0}</div>
             <div className="stat-label">Check In Delay</div>
@@ -316,16 +320,8 @@ export default function AnalyticsPage() {
             <div className="stat-label">Early Checkout</div>
             {studentCounts.early_checkout > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.early_checkout} Students</div>}
           </div>
-          <div className="card stat-card" style={{ cursor: counts.rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('rejected', counts.rejected)}>
-            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.rejected || 0}</div>
-            <div className="stat-label">Admin Rejected</div>
-            {studentCounts.rejected > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.rejected} Students</div>}
-          </div>
-          <div className="card stat-card" style={{ cursor: counts.auto_rejected > 0 ? 'pointer' : 'default' }} onClick={() => handleBadgeClick('auto_rejected', counts.auto_rejected)}>
-            <div className="stat-value" style={{ color: 'var(--color-error)' }}>{counts.auto_rejected || 0}</div>
-            <div className="stat-label">Auto-Rejected</div>
-            {studentCounts.auto_rejected > 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{studentCounts.auto_rejected} Students</div>}
-          </div>
+
+
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-xl)', marginTop: 'var(--space-2xl)' }}>
@@ -339,7 +335,7 @@ export default function AnalyticsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-text-secondary)', marginBottom: '-20px', zIndex: 1, paddingRight: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
                     <span>Total Bookings: {cabinUsage.reduce((sum, cabin) => sum + (cabin.bookingCount || 0), 0)}</span>
-                    <span>Total Students: {cabinUsage.reduce((sum, cabin) => sum + (cabin.totalPeople || 0), 0)}</span>
+
                   </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -508,26 +504,36 @@ export default function AnalyticsPage() {
                     <div><strong>Slot:</strong> {formatBookingTimeSlot(detailBooking)}</div>
                     <div><strong>Status:</strong> <span className={`badge ${statusMap[detailBooking.status]?.className || 'badge-default'}`}>{statusMap[detailBooking.status]?.label || detailBooking.status}</span></div>
                     <div><strong>Main Student:</strong> {detailBooking.mainStudent?.name}</div>
-                    <div><strong>Enrollment:</strong> {detailBooking.mainStudent?.enrollmentNumber}</div>
+                    {detailBooking.mainStudent?.enrollmentNumber && <div><strong>Enrollment No:</strong> {detailBooking.mainStudent.enrollmentNumber}</div>}
                     <div><strong>Phone:</strong> {detailBooking.mainStudent?.phoneNumber}</div>
                     <div><strong>People Count:</strong> {detailBooking.peopleCount}</div>
-                    {detailBooking.groupMembers?.length > 0 && (
+                    {detailBooking.joinedMembers?.length > 0 ? (
+                      <div>
+                        <strong>Joined Members ({detailBooking.joinedMembers.length}):</strong>
+                        <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)' }}>
+                          {detailBooking.joinedMembers.map((m, i) => (
+                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}> {m.name} ({m.email})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : detailBooking.groupMembers?.length > 0 ? (
                       <div>
                         <strong>Group Members:</strong>
                         <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)' }}>
                           {detailBooking.groupMembers.map((m, i) => (
-                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}>{m.name} ({m.enrollmentNumber})</li>
+                            <li key={i} style={{ fontSize: 'var(--font-size-sm)' }}>
+                              {m.name} {m.enrollmentNumber ? `(${m.enrollmentNumber})` : ''}
+                            </li>
                           ))}
                         </ul>
                       </div>
-                    )}
+                    ) : null}
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                     {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
                     <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
                     {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                     {detailBooking.expiresAt && <div><strong>Expires:</strong> {new Date(detailBooking.expiresAt).toLocaleString()}</div>}
-                    {detailBooking.approvedBy && <div><strong>Approved By:</strong> {detailBooking.approvedBy.username}</div>}
                     {detailBooking.studentUserId && <div><strong>Account:</strong> {detailBooking.studentUserId.email}</div>}
                   </div>
                 )}
@@ -564,7 +570,7 @@ export default function AnalyticsPage() {
                 <p style={{ marginBottom: 'var(--space-md)' }}>Filter by Status (leave all unchecked to include all):</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
                   {[
-                    'pending', 'approved', 'rejected', 'auto_rejected',
+                    'pending', 'pending_members', 'approved', 'rejected', 'auto_rejected',
                     'cancelled_by_student', 'cancelled_by_admin', 'completed',
                     'cancel_requested', 'awaiting_checkin', 'checked_in', 'no_show', 'early_checkout'
                   ].map((status) => (
@@ -610,11 +616,13 @@ export default function AnalyticsPage() {
                               else if (k === 'slot') val = formatBookingTimeSlot(b);
                               else if (k === 'cabin') val = b.cabinId?.name;
                               else if (k === 'student_name') val = b.mainStudent?.name;
-                              else if (k === 'enrollment') val = b.mainStudent?.enrollmentNumber;
+                              else if (k === 'enrollment_no') val = b.mainStudent?.enrollmentNumber;
                               else if (k === 'phone') val = b.mainStudent?.phoneNumber;
                               else if (k === 'email') val = b.studentUserId?.email;
                               else if (k === 'people_count') val = b.peopleCount;
-                              else if (k === 'group_members') val = (b.groupMembers || []).map(m => m.name).join(', ');
+                              else if (k === 'group_members') val = b.joinedMembers?.length > 0 
+                                ? b.joinedMembers.map(m => m.name).join(', ') 
+                                : (b.groupMembers || []).map(m => m.name).join(', ');
                               else if (k === 'status') val = b.status?.replace(/_/g, ' ');
                               else if (k === 'requested_at') val = b.requestedAt ? new Date(b.requestedAt).toLocaleString() : '';
                               return <td key={k} style={{ whiteSpace: 'nowrap' }}>{val || '-'}</td>;

@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
-import { createBookingRequest } from '@/lib/api';
+import { createBookingRequest, getJoinStatus, cancelPendingMembers } from '@/lib/api';
+import { QRCodeSVG } from 'qrcode.react';
+
+const JOIN_POLL_INTERVAL = 10000; // 10 seconds
 
 export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots = 2 }) {
   const { user } = useAuth();
@@ -11,19 +14,21 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
   const [slotCount, setSlotCount] = useState(1);
   const [formData, setFormData] = useState({
     mainStudentName: user?.name || '',
-    mainStudentEnrollment: user?.enrollmentNumber || '',
     mainStudentPhone: user?.phoneNumber || '',
     peopleCount: cabin.minPeople,
     timeSlotId: cabin.availableSlots && cabin.availableSlots.length > 0 ? cabin.availableSlots[0].id : '',
   });
-  const [groupMembers, setGroupMembers] = useState(
-    Array.from({ length: Math.max(0, cabin.minPeople - 1) }, () => ({
-      name: '',
-      enrollmentNumber: '',
-    }))
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Group joining state
+  const [pendingBooking, setPendingBooking] = useState(null);
+  const [joinStatus, setJoinStatus] = useState(null);
+  const [countdown, setCountdown] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const pollRef = useRef(null);
+  const countdownRef = useRef(null);
 
   // Generate consecutive slot pairs from available slots
   const consecutiveSlotPairs = useMemo(() => {
@@ -58,28 +63,63 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
     }
   }, [slotCount, cabin.availableSlots, consecutiveSlotPairs]);
 
+  const joinUrl = useMemo(() => {
+    if (!pendingBooking?.joinToken) return '';
+    const base = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${base}/join/${pendingBooking.joinToken}`;
+  }, [pendingBooking]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!pendingBooking?.joinExpiresAt) return;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, new Date(pendingBooking.joinExpiresAt).getTime() - Date.now());
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(countdownRef.current);
+        clearInterval(pollRef.current);
+      }
+    };
+
+    updateCountdown();
+    countdownRef.current = setInterval(updateCountdown, 1000);
+    return () => clearInterval(countdownRef.current);
+  }, [pendingBooking]);
+
+  // Polling for join status
+  const pollJoinStatus = useCallback(async () => {
+    if (!pendingBooking?._id) return;
+    try {
+      const status = await getJoinStatus(pendingBooking._id);
+      setJoinStatus(status);
+      if (status.status === 'approved') {
+        clearInterval(pollRef.current);
+        clearInterval(countdownRef.current);
+        // Auto-close after brief celebration
+        setTimeout(() => {
+          onSuccess();
+        }, 2000);
+      } else if (status.status !== 'pending_members') {
+        // Expired or cancelled
+        clearInterval(pollRef.current);
+        clearInterval(countdownRef.current);
+      }
+    } catch (err) {
+      // Ignore polling errors
+    }
+  }, [pendingBooking, onSuccess]);
+
+  useEffect(() => {
+    if (!pendingBooking) return;
+    pollJoinStatus(); // initial fetch
+    pollRef.current = setInterval(pollJoinStatus, JOIN_POLL_INTERVAL);
+    return () => clearInterval(pollRef.current);
+  }, [pendingBooking, pollJoinStatus]);
+
   const handlePeopleCountChange = (e) => {
     const count = parseInt(e.target.value, 10);
     setFormData((prev) => ({ ...prev, peopleCount: count }));
-    const newGroupSize = count - 1;
-    setGroupMembers((prev) => {
-      if (newGroupSize > prev.length) {
-        return [
-          ...prev,
-          ...Array.from({ length: newGroupSize - prev.length }, () => ({
-            name: '',
-            enrollmentNumber: '',
-          })),
-        ];
-      }
-      return prev.slice(0, newGroupSize);
-    });
-  };
-
-  const handleGroupMemberChange = (index, field, value) => {
-    setGroupMembers((prev) =>
-      prev.map((member, i) => (i === index ? { ...member, [field]: value } : member))
-    );
   };
 
   const handleSubmit = async (e) => {
@@ -89,58 +129,22 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
 
     try {
       const nameRegex = /^[a-zA-Z\s\.\-']+$/;
-      const enrollmentRegex = /^\d+$/;
-      const phoneRegex = /^\d{10}$/;
-
+      const phoneRegex = /^[0-9]{10}$/;
       const mainName = formData.mainStudentName.trim();
-      const mainEnrollment = formData.mainStudentEnrollment.trim();
       const mainPhone = formData.mainStudentPhone.trim();
 
-      const validateEnrollment = (enroll, label) => {
-        if (userType === 'student') {
-          if (enroll.startsWith('23')) {
-            if (enroll.length !== 6) throw new Error(`${label} must be 6 digits.`);
-          } else if (enroll.match(/^(2[4-9]|[3-9]\d)/)) {
-            if (enroll.length !== 10) throw new Error(`${label} must be 10 digits.`);
-          }
-        }
-      };
-
       if (!nameRegex.test(mainName)) throw new Error('Name should only contain letters.');
-      if (!enrollmentRegex.test(mainEnrollment)) throw new Error('Enrollment/ID must be numbers only.');
-      validateEnrollment(mainEnrollment, 'Main student enrollment');
       if (!phoneRegex.test(mainPhone)) throw new Error('Phone must be exactly 10 digits.');
       if (!formData.timeSlotId) throw new Error('Please select a valid time slot.');
-
-      const enrollments = new Set([mainEnrollment]);
-
-      if (userType === 'student') {
-        for (let i = 0; i < groupMembers.length; i++) {
-          const m = groupMembers[i];
-          const mName = m.name.trim();
-          const mEnrollment = m.enrollmentNumber.trim();
-          if (!nameRegex.test(mName)) throw new Error(`Group member ${i + 2} name should only contain letters.`);
-          if (!enrollmentRegex.test(mEnrollment)) throw new Error(`Group member ${i + 2} enrollment must be numbers only.`);
-          validateEnrollment(mEnrollment, `Group member ${i + 2} enrollment`);
-          if (enrollments.has(mEnrollment)) {
-            throw new Error(`Duplicate enrollment number found: ${mEnrollment}`);
-          }
-          enrollments.add(mEnrollment);
-        }
-      }
 
       const requestBody = {
         cabinId: cabin.id,
         userType,
         mainStudent: {
           name: formData.mainStudentName.trim(),
-          enrollmentNumber: formData.mainStudentEnrollment.trim(),
           phoneNumber: formData.mainStudentPhone.trim(),
         },
-        groupMembers: userType === 'student' ? groupMembers.map((m) => ({
-          name: m.name.trim(),
-          enrollmentNumber: m.enrollmentNumber.trim(),
-        })) : [],
+        groupMembers: [],
         peopleCount: userType === 'student' ? formData.peopleCount : 1,
         slotCount,
       };
@@ -154,8 +158,16 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
         requestBody.timeSlotIds = [formData.timeSlotId];
       }
 
-      await createBookingRequest(requestBody);
-      onSuccess();
+      const result = await createBookingRequest(requestBody);
+      const booking = result.booking;
+
+      if (booking.status === 'pending_members') {
+        // Group booking: show QR code / link
+        setPendingBooking(booking);
+      } else {
+        // Solo/faculty booking: submitted for approval
+        onSuccess();
+      }
     } catch (err) {
       setError(err.message || 'Failed to create booking request');
     } finally {
@@ -163,9 +175,191 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
     }
   };
 
+  const handleCancelPending = async () => {
+    if (!pendingBooking?._id) return;
+    setCancelling(true);
+    try {
+      await cancelPendingMembers(pendingBooking._id);
+      clearInterval(pollRef.current);
+      clearInterval(countdownRef.current);
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to cancel');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(joinUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const formatCountdown = (ms) => {
+    const totalSecs = Math.ceil(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const countOptions = [];
   for (let i = cabin.minPeople; i <= cabin.maxPeople; i++) {
     countOptions.push(i);
+  }
+
+  // If we have a pending booking, show the waiting room
+  if (pendingBooking) {
+    const isApproved = joinStatus?.status === 'approved';
+    const isExpired = countdown !== null && countdown <= 0 && !isApproved;
+    const joinedCount = joinStatus?.joinedCount ?? 0;
+    const totalNeeded = joinStatus?.totalNeeded ?? (pendingBooking.peopleCount - 1);
+
+    return (
+      <div className="modal-overlay" onClick={(e) => e.stopPropagation()}>
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+          <div className="modal-header">
+            <h2>{isApproved ? ' Booking Confirmed!' : isExpired ? '⏰ Invite Expired' : 'Waiting for Members'}</h2>
+            <button className="btn btn-ghost" onClick={() => {
+              clearInterval(pollRef.current);
+              clearInterval(countdownRef.current);
+              onClose();
+            }}>Close</button>
+          </div>
+
+          <div className="modal-body" style={{ textAlign: 'center' }}>
+            {isApproved ? (
+              <div>
+                <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}></div>
+                <p style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-success)' }}>
+                  All members joined! Your cabin is booked.
+                </p>
+                <p style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-sm)' }}>
+                  Redirecting to dashboard...
+                </p>
+              </div>
+            ) : isExpired ? (
+              <div>
+                <p style={{ color: 'var(--color-error)', fontWeight: 600 }}>
+                  The 10-minute window has expired. Only {joinedCount} of {totalNeeded} members joined.
+                </p>
+                <p style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-sm)' }}>
+                  The slot has been released. You can try booking again.
+                </p>
+                <button className="btn btn-primary" style={{ marginTop: 'var(--space-md)' }} onClick={onClose}>
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Countdown */}
+                <div style={{
+                  background: countdown < 60000 ? 'var(--color-error-bg, #fef2f2)' : 'var(--color-bg)',
+                  border: `2px solid ${countdown < 60000 ? 'var(--color-error)' : 'var(--color-primary)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-md)',
+                  marginBottom: 'var(--space-lg)',
+                }}>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>Time Remaining</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: countdown < 60000 ? 'var(--color-error)' : 'var(--color-primary)' }}>
+                    {countdown !== null ? formatCountdown(countdown) : '--:--'}
+                  </div>
+                </div>
+
+                {/* Progress */}
+                <div style={{ marginBottom: 'var(--space-lg)' }}>
+                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--space-xs)' }}>
+                    {joinedCount} / {totalNeeded} members joined
+                  </div>
+                  <div style={{ height: '8px', background: 'var(--color-border)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${totalNeeded > 0 ? (joinedCount / totalNeeded) * 100 : 0}%`,
+                      background: 'var(--color-primary)',
+                      borderRadius: '4px',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                </div>
+
+                {/* Joined members list */}
+                {joinStatus?.joinedMembers?.length > 0 && (
+                  <div style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>
+                    <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Joined:</div>
+                    {joinStatus.joinedMembers.map((m, i) => (
+                      <div key={i} style={{
+                        padding: 'var(--space-xs) var(--space-sm)',
+                        background: 'var(--color-bg)',
+                        borderRadius: 'var(--radius-sm)',
+                        marginBottom: 'var(--space-xs)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-sm)',
+                      }}>
+                        <span style={{ color: 'var(--color-success)' }}></span>
+                        <span>{m.name}</span>
+                        <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>{m.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* QR Code */}
+                <div style={{
+                  background: '#fff',
+                  display: 'inline-block',
+                  padding: 'var(--space-md)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-border)',
+                  marginBottom: 'var(--space-md)',
+                }}>
+                  <QRCodeSVG value={joinUrl} size={200} level="M" />
+                </div>
+
+                <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-md)' }}>
+                  Ask your group members to scan this QR code or use the link below to join.
+                </p>
+
+                {/* Copy link */}
+                <div style={{
+                  display: 'flex',
+                  gap: 'var(--space-sm)',
+                  alignItems: 'stretch',
+                  marginBottom: 'var(--space-md)'
+                }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={joinUrl}
+                    readOnly
+                    style={{ flex: 1, fontSize: 'var(--font-size-sm)' }}
+                    onClick={(e) => e.target.select()}
+                  />
+                  <button
+                    className={`btn ${linkCopied ? 'btn-success' : 'btn-primary'}`}
+                    onClick={handleCopyLink}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {linkCopied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
+                  <button
+                    className="btn btn-danger"
+                    style={{ width: '100%' }}
+                    onClick={handleCancelPending}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? 'Cancelling...' : 'Cancel Request'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -222,12 +416,19 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
                 required
               >
                 {slotCount === 1 ? (
-                  cabin.availableSlots && cabin.availableSlots.length > 0 ? (
-                    cabin.availableSlots.map((slot) => (
-                      <option key={slot.id} value={slot.id}>
-                        {slot.label}
-                      </option>
-                    ))
+                  (cabin.availableSlots?.length > 0 || cabin.holdSlots?.length > 0) ? (
+                    <>
+                      {cabin.availableSlots?.map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.label}
+                        </option>
+                      ))}
+                      {cabin.holdSlots?.map((slot) => (
+                        <option key={slot.id} value={slot.id} disabled>
+                          {slot.label} (On Hold)
+                        </option>
+                      ))}
+                    </>
                   ) : (
                     <option value="" disabled>No slots available</option>
                   )
@@ -261,12 +462,17 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
                     </option>
                   ))}
                 </select>
+                {formData.peopleCount > 1 && (
+                  <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)' }}>
+                    After booking, a QR code and link will be generated. Your {formData.peopleCount - 1} group member(s) must scan/click to join within 10 minutes.
+                  </p>
+                )}
               </div>
             )}
 
             <div style={{ marginBottom: userType === 'student' ? 'var(--space-lg)' : 0 }}>
               <span className="form-label" style={{ display: 'block', marginBottom: 'var(--space-md)', fontWeight: 600 }}>
-                {userType === 'student' ? 'Main Student (Booking Owner)' : 'Faculty Details'}
+                {userType === 'student' ? 'Your Details (Booking Owner)' : 'Faculty Details'}
               </span>
               <div className="form-group">
                 <label className="form-label">Full Name <span className="required">*</span></label>
@@ -274,14 +480,7 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
                   onChange={(e) => setFormData((prev) => ({ ...prev, mainStudentName: e.target.value }))}
                   placeholder="Enter full name" required />
               </div>
-              <div className="form-group">
-                <label className="form-label">
-                  {userType === 'student' ? 'Enrollment Number' : 'Employee ID'} <span className="required">*</span>
-                </label>
-                <input type="text" className="form-input" value={formData.mainStudentEnrollment}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, mainStudentEnrollment: e.target.value }))}
-                  placeholder={`Enter ${userType === 'student' ? 'enrollment number' : 'employee ID'}`} required />
-              </div>
+
               <div className="form-group">
                 <label className="form-label">Phone Number <span className="required">*</span></label>
                 <input type="tel" className="form-input" value={formData.mainStudentPhone}
@@ -289,33 +488,6 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
                   placeholder="Enter phone number" required />
               </div>
             </div>
-
-            {userType === 'student' && groupMembers.length > 0 && (
-              <div className="group-members-section">
-                <span className="form-label" style={{ display: 'block', marginBottom: 'var(--space-md)', fontWeight: 600 }}>
-                  Group Members ({groupMembers.length})
-                </span>
-                {groupMembers.map((member, index) => (
-                  <div key={index}>
-                    <div className="group-member-label">Member {index + 2}</div>
-                    <div className="group-member-row">
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Name <span className="required">*</span></label>
-                        <input type="text" className="form-input" value={member.name}
-                          onChange={(e) => handleGroupMemberChange(index, 'name', e.target.value)}
-                          placeholder="Full name" required />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Enrollment No. <span className="required">*</span></label>
-                        <input type="text" className="form-input" value={member.enrollmentNumber}
-                          onChange={(e) => handleGroupMemberChange(index, 'enrollmentNumber', e.target.value)}
-                          placeholder="Enrollment number" required />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
@@ -323,7 +495,10 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-md)' }}>
               <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Submitting...' : slotCount === 2 ? 'Submit 2-Slot Booking' : 'Submit Booking Request'}
+                {loading ? 'Submitting...' :
+                  userType === 'student' && formData.peopleCount > 1
+                    ? `Generate Invite Link (${formData.peopleCount} people)`
+                    : slotCount === 2 ? 'Submit 2-Slot Booking' : 'Submit Booking Request'}
               </button>
             </div>
           </div>

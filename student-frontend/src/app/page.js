@@ -15,7 +15,13 @@ function LoginContent() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.push('/dashboard');
+      const redirect = sessionStorage.getItem('redirectUrl');
+      if (redirect) {
+        sessionStorage.removeItem('redirectUrl');
+        router.push(redirect);
+      } else {
+        router.push('/dashboard');
+      }
     }
   }, [user, loading, router]);
 
@@ -25,7 +31,7 @@ function LoginContent() {
     try {
       const data = await loginWithGoogle(credentialResponse.credential);
       login(data.user);
-      router.push('/dashboard');
+      // Redirection is handled by the useEffect above when 'user' state updates.
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {

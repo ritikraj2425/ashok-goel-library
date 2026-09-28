@@ -83,4 +83,62 @@ router.post('/:id/cancel-approved', authStudent, async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/bookings/:id/cancel-pending-members
+ * Cancel a booking that is waiting for group members (host only).
+ * Does NOT count as a strike.
+ */
+router.post('/:id/cancel-pending-members', authStudent, async (req, res, next) => {
+  try {
+    const { cancelPendingMembers } = require('../services/booking.service');
+    const booking = await cancelPendingMembers(req.params.id, req.user._id);
+    res.json({ message: 'Group booking cancelled.', booking });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/join-info/:token
+ * Get info about a group invite (for the join page, before joining).
+ * Accessible to authenticated students only.
+ */
+router.get('/join-info/:token', authStudent, async (req, res, next) => {
+  try {
+    const { getJoinInfo } = require('../services/booking.service');
+    const info = await getJoinInfo(req.params.token);
+    res.json(info);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/join/:token
+ * Join a group booking via invite token.
+ */
+router.post('/join/:token', authStudent, async (req, res, next) => {
+  try {
+    const { joinGroupBooking } = require('../services/booking.service');
+    const result = await joinGroupBooking(req.params.token, req.user._id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/:id/join-status
+ * Get the join status of a group booking (host polling).
+ */
+router.get('/:id/join-status', authStudent, async (req, res, next) => {
+  try {
+    const { getJoinStatus } = require('../services/booking.service');
+    const status = await getJoinStatus(req.params.id, req.user._id);
+    res.json(status);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

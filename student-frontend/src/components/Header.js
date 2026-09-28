@@ -39,7 +39,7 @@ export default function Header() {
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           aria-label="Toggle menu"
         >
-          ☰
+          
         </button>
 
         <div className={`header-user ${isMenuOpen ? 'open' : ''}`}>

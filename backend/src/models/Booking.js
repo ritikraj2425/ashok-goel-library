@@ -4,7 +4,7 @@ const { BOOKING_STATUS, ACTIVE_STATUSES } = require('../utils/constants');
 const groupMemberSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    enrollmentNumber: { type: String, required: true, trim: true, uppercase: true },
+    name: { type: String, required: true, trim: true },
   },
   { _id: false }
 );
@@ -32,7 +32,6 @@ const bookingSchema = new mongoose.Schema({
 
   mainStudent: {
     name: { type: String, required: true, trim: true },
-    enrollmentNumber: { type: String, required: true, trim: true, uppercase: true },
     phoneNumber: { type: String, required: true, trim: true },
   },
 
@@ -40,6 +39,18 @@ const bookingSchema = new mongoose.Schema({
     type: [groupMemberSchema],
     default: [],
   },
+
+  // New: Verified group members who joined via QR/link
+  joinedMembers: [{
+    studentUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    name: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
+    joinedAt: { type: Date, default: Date.now },
+  }],
+
+  // Invite token & expiry for QR/link joining
+  joinToken: { type: String, sparse: true, index: true },
+  joinExpiresAt: { type: Date },
 
   peopleCount: {
     type: Number,
@@ -132,6 +143,10 @@ bookingSchema.index({ status: 1, approvalDeadlineAt: 1 });
 bookingSchema.index({ status: 1, expiresAt: 1 });
 bookingSchema.index({ status: 1, checkInDeadlineAt: 1 });
 bookingSchema.index({ status: 1, startTime: 1 });
+
+// For join token lookups
+bookingSchema.index({ joinToken: 1, status: 1 });
+bookingSchema.index({ status: 1, joinExpiresAt: 1 });
 
 // For analytics
 bookingSchema.index({ requestedAt: 1 });
