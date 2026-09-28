@@ -405,11 +405,6 @@ export default function AnalyticsPage() {
               <div className="modal-header" style={{ alignItems: 'flex-start' }}>
                 <div>
                   <h2 style={{ textTransform: 'capitalize', marginBottom: 'var(--space-xs)' }}>{selectedStatus.replace(/_/g, ' ')} Bookings</h2>
-                  {totalStudentsInModal > 0 && (
-                    <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-                      Total Students: {totalStudentsInModal}
-                    </div>
-                  )}
                 </div>
                 <button className="btn btn-ghost" onClick={() => setSelectedStatus(null)}>Close</button>
               </div>
