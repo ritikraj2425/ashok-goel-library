@@ -19,17 +19,8 @@ export default function BookCabinPage() {
   
   const [selectedCabinId, setSelectedCabinId] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [message, setMessage] = useState('');
   const [bookingInProgress, setBookingInProgress] = useState(false);
-
-  useEffect(() => {
-    if (!authLoading && !admin) {
-      router.push('/login');
-      return;
-    }
-    if (admin) {
-      fetchCabinStatus();
-    }
-  }, [admin, authLoading, router]);
 
   const fetchCabinStatus = async () => {
     try {
@@ -45,6 +36,16 @@ export default function BookCabinPage() {
     }
   };
 
+  useEffect(() => {
+    if (!authLoading && !admin) {
+      router.push('/login');
+      return;
+    }
+    if (admin) {
+      fetchCabinStatus();
+    }
+  }, [admin, authLoading, router]);
+
   const handleBook = async (e) => {
     e.preventDefault();
     if (!selectedCabinId || !selectedSlotId) {
@@ -58,10 +59,12 @@ export default function BookCabinPage() {
       await createAdminBooking({
         cabinId: selectedCabinId,
         timeSlotId: selectedSlotId,
+        message: message.trim(),
       });
       setSuccess('Cabin successfully booked!');
       setSelectedCabinId('');
       setSelectedSlotId('');
+      setMessage('');
       fetchCabinStatus();
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
@@ -148,6 +151,20 @@ export default function BookCabinPage() {
                 </select>
               </div>
             )}
+            
+            <div className="form-group" style={{ marginTop: 'var(--space-md)' }}>
+              <label className="form-label">Message (Optional)</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="Enter a reason or note for this admin booking..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+              <p className="form-hint" style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                This message will be visible in the analytics/booking details as an admin note.
+              </p>
+            </div>
 
             <button 
               type="submit" 

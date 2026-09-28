@@ -10,7 +10,7 @@ const { getAnalytics } = require('../services/analytics.service');
  */
 router.get('/', authAdmin, async (req, res, next) => {
   try {
-    let { startDate, endDate, period, search } = req.query;
+    let { startDate, endDate, period, search, cabinId } = req.query;
 
     const now = new Date();
 
@@ -29,7 +29,7 @@ router.get('/', authAdmin, async (req, res, next) => {
       }
     }
 
-    const analytics = await getAnalytics(startDate, endDate, search);
+    const analytics = await getAnalytics(startDate, endDate, search, cabinId);
     res.json(analytics);
   } catch (error) {
     next(error);
@@ -43,7 +43,7 @@ router.get('/', authAdmin, async (req, res, next) => {
  */
 router.get('/bookings', authAdmin, async (req, res, next) => {
   try {
-    let { startDate, endDate, period, status, page, limit, search } = req.query;
+    let { startDate, endDate, period, status, page, limit, search, cabinId } = req.query;
     const now = new Date();
 
     if (!startDate || !endDate) {
@@ -63,7 +63,7 @@ router.get('/bookings', authAdmin, async (req, res, next) => {
     const limitNum = parseInt(limit) || 20;
 
     const { getAnalyticsBookings } = require('../services/analytics.service');
-    const result = await getAnalyticsBookings(startDate, endDate, status, pageNum, limitNum, search);
+    const result = await getAnalyticsBookings(startDate, endDate, status, pageNum, limitNum, search, cabinId);
     res.json(result);
   } catch (error) {
     next(error);
@@ -78,7 +78,7 @@ router.get('/bookings', authAdmin, async (req, res, next) => {
 router.post('/download-csv', authAdmin, async (req, res, next) => {
   try {
     const { generateAnalyticsCSV } = require('../services/analytics.service');
-    let { columns, period, startDate, endDate, statuses, search } = req.body;
+    let { columns, period, startDate, endDate, statuses, search, cabinId } = req.body;
 
     const now = new Date();
     if (!startDate || !endDate) {
@@ -94,7 +94,7 @@ router.post('/download-csv', authAdmin, async (req, res, next) => {
       }
     }
 
-    const csv = await generateAnalyticsCSV(startDate, endDate, columns, statuses, search);
+    const csv = await generateAnalyticsCSV(startDate, endDate, columns, statuses, search, cabinId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="analytics_report_${new Date().toISOString().split('T')[0]}.csv"`);
     res.send(csv);

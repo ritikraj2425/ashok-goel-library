@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/lib/auth';
-import { getAnalytics, getAnalyticsBookings, getBookingDetail, downloadAnalyticsCSV } from '@/lib/api';
+import { getAnalytics, getAnalyticsBookings, getBookingDetail, downloadAnalyticsCSV, getAdminCabins } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -81,6 +81,9 @@ export default function AnalyticsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [cabins, setCabins] = useState([]);
+  const [selectedCabinId, setSelectedCabinId] = useState('');
+  const [appliedCabinId, setAppliedCabinId] = useState('');
 
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -107,7 +110,7 @@ export default function AnalyticsPage() {
       const selectedCols = Object.entries(downloadColumns).filter(([, v]) => v).map(([k]) => k);
       if (selectedCols.length === 0) { alert('Please select at least one column.'); setDownloading(false); return; }
 
-      const params = { columns: selectedCols, period, search: appliedSearch };
+      const params = { columns: selectedCols, period, search: appliedSearch, cabinId: appliedCabinId };
       if (downloadStatuses.length > 0) {
         params.statuses = downloadStatuses;
       }
@@ -127,7 +130,7 @@ export default function AnalyticsPage() {
   const fetchBookings = async (status, p, query = appliedSearch) => {
     setLoadingBookings(true);
     try {
-      const params = { period, status, page: p, search: query };
+      const params = { period, status, page: p, search: query, cabinId: appliedCabinId };
       if (period === 'custom' && startDate && endDate) {
         params.startDate = new Date(startDate).toISOString();
         params.endDate = new Date(endDate).toISOString();
@@ -152,11 +155,16 @@ export default function AnalyticsPage() {
     fetchBookings(status, 1);
   };
 
-  const handleViewDetail = async (id) => {
+  const handleViewDetail = async (rowBooking) => {
     setLoadingDetail(true);
     try {
-      const b = await getBookingDetail(id);
-      setDetailBooking(b.booking);
+      const b = await getBookingDetail(rowBooking._id);
+      setDetailBooking({
+        ...b.booking,
+        status: rowBooking.status,
+        timeSlotId: rowBooking.timeSlotId,
+        timeSlotIds: rowBooking.timeSlotIds,
+      });
     } catch (e) {
       alert(e.message);
     } finally {
@@ -166,24 +174,27 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (!authLoading && !admin) { router.push('/login'); return; }
+    if (admin) {
+      getAdminCabins().then(res => setCabins(res.cabins || [])).catch(console.error);
+    }
   }, [admin, authLoading, router]);
 
   useEffect(() => {
     if (!admin) return;
-    
-    const params = { period, search: appliedSearch };
+
+    const params = { period, search: appliedSearch, cabinId: appliedCabinId };
     if (period === 'custom') {
       if (!startDate || !endDate) return;
       params.startDate = new Date(startDate).toISOString();
       params.endDate = new Date(endDate).toISOString();
     }
-    
+
     setLoading(true);
     getAnalytics(params)
       .then(setAnalytics)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [admin, period, appliedSearch, startDate, endDate]);
+  }, [admin, period, appliedSearch, appliedCabinId, startDate, endDate]);
 
   if (authLoading || loading) {
     return (
@@ -240,6 +251,15 @@ export default function AnalyticsPage() {
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            <select
+              className="form-select"
+              value={selectedCabinId}
+              onChange={(e) => setSelectedCabinId(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--color-border)', width: '180px' }}
+            >
+              <option value="">All Cabins</option>
+              {cabins.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
+            </select>
             <input
               type="text"
               placeholder="Search by name or enrollment..."
@@ -256,9 +276,10 @@ export default function AnalyticsPage() {
               className="btn btn-primary"
               onClick={() => {
                 setAppliedSearch(searchQuery);
+                setAppliedCabinId(selectedCabinId);
               }}
             >
-              Search
+              Filter
             </button>
           </div>
         </div>
@@ -322,18 +343,18 @@ export default function AnalyticsPage() {
                   </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie 
-                        data={cabinUsage} 
-                        dataKey="bookingCount" 
-                        nameKey="cabinName" 
-                        cx="50%" cy="50%" outerRadius={100} 
+                      <Pie
+                        data={cabinUsage}
+                        dataKey="bookingCount"
+                        nameKey="cabinName"
+                        cx="50%" cy="50%" outerRadius={100}
                         label={({ cabinName, bookingCount, totalPeople }) => `${cabinName}: ${bookingCount} B / ${totalPeople} S`}
                       >
                         {cabinUsage.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'][index % 5]} />
                         ))}
                       </Pie>
-                      <Tooltip 
+                      <Tooltip
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
@@ -346,7 +367,7 @@ export default function AnalyticsPage() {
                             );
                           }
                           return null;
-                        }} 
+                        }}
                       />
                       <Legend />
                     </PieChart>
@@ -411,8 +432,8 @@ export default function AnalyticsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {statusBookings.map(b => (
-                          <tr key={b._id} onClick={() => handleViewDetail(b._id)} style={{ cursor: 'pointer' }} className="table-row-hover">
+                        {statusBookings.map((b, index) => (
+                          <tr key={`${b._id}-${index}`} onClick={() => handleViewDetail(b)} style={{ cursor: 'pointer' }} className="table-row-hover">
                             <td>{b.bookingDate}</td>
                             <td>{formatBookingTimeSlot(b)}</td>
                             <td>{b.studentUserId?.name || b.mainStudent?.name}</td>
@@ -507,6 +528,7 @@ export default function AnalyticsPage() {
                     )}
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
+                    {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
                     <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
                     {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                     {detailBooking.expiresAt && <div><strong>Expires:</strong> {new Date(detailBooking.expiresAt).toLocaleString()}</div>}

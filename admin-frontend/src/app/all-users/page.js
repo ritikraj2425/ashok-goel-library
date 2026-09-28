@@ -11,7 +11,7 @@ export default function AllUsersPage() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
 
@@ -106,7 +106,7 @@ export default function AllUsersPage() {
                     {students.map((student) => {
                       const isBlockedTemp = student.blockedUntil && new Date(student.blockedUntil) > new Date();
                       const isBlockedPerm = student.isBlocked;
-                      
+
                       let statusBadge = <span className="badge badge-available">Active</span>;
                       if (isBlockedPerm) statusBadge = <span className="badge badge-rejected">Permanently Blocked</span>;
                       else if (isBlockedTemp) statusBadge = <span className="badge badge-rejected">Temporarily Blocked</span>;

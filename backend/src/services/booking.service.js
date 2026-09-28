@@ -459,12 +459,25 @@ async function cancelApprovedByStudent(bookingId, userId) {
 
   // Check for permanent block (3 or more approved cancellations in 7 days)
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const cancellationCount = await Booking.countDocuments({
+  const pastBookings = await Booking.find({
     studentUserId: userId,
-    status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
     approvedAt: { $exists: true, $ne: null }, // Only count cancellations of approved bookings
     cancelledAt: { $gte: sevenDaysAgo },
+    status: { $in: [BOOKING_STATUS.CANCELLED_BY_STUDENT, BOOKING_STATUS.EARLY_CHECKOUT] }
   });
+
+  let cancellationCount = 0;
+  for (const b of pastBookings) {
+    if (b.status === BOOKING_STATUS.CANCELLED_BY_STUDENT) {
+      cancellationCount++;
+    } else if (b.status === BOOKING_STATUS.EARLY_CHECKOUT && b.slotCount === 2 && b.timeSlotIds && b.timeSlotIds.length === 2) {
+      const secondSlotStartStr = b.timeSlotIds[1].split('-')[0];
+      const cancelledIST = new Date(b.cancelledAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+      if (cancelledIST < secondSlotStartStr) {
+        cancellationCount++;
+      }
+    }
+  }
 
   if (cancellationCount >= 3) {
     await User.findByIdAndUpdate(userId, {
@@ -689,6 +702,15 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
     ? BOOKING_STATUS.EARLY_CHECKOUT
     : BOOKING_STATUS.CANCELLED_BY_ADMIN;
 
+  let secondSlotCancelledByStudent = false;
+  if (newStatus === BOOKING_STATUS.EARLY_CHECKOUT && bookingToCancel.slotCount === 2 && bookingToCancel.timeSlotIds && bookingToCancel.timeSlotIds.length === 2) {
+    const secondSlotStartStr = bookingToCancel.timeSlotIds[1].split('-')[0];
+    const cancelledIST = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+    if (cancelledIST < secondSlotStartStr) {
+      secondSlotCancelledByStudent = true;
+    }
+  }
+
   const booking = await Booking.findOneAndUpdate(
     { _id: bookingId },
     {
@@ -701,6 +723,53 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
     },
     { new: true }
   );
+
+  if (secondSlotCancelledByStudent && booking.studentUserId) {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const pastBookings = await Booking.find({
+      studentUserId: booking.studentUserId,
+      approvedAt: { $exists: true, $ne: null },
+      cancelledAt: { $gte: sevenDaysAgo },
+      status: { $in: [BOOKING_STATUS.CANCELLED_BY_STUDENT, BOOKING_STATUS.EARLY_CHECKOUT] }
+    });
+
+    let cancellationCount = 0;
+    for (const b of pastBookings) {
+      if (b.status === BOOKING_STATUS.CANCELLED_BY_STUDENT) {
+        cancellationCount++;
+      } else if (b.status === BOOKING_STATUS.EARLY_CHECKOUT && b.slotCount === 2 && b.timeSlotIds && b.timeSlotIds.length === 2) {
+        const secondSlotStartStr = b.timeSlotIds[1].split('-')[0];
+        const cancelledIST = new Date(b.cancelledAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+        if (cancelledIST < secondSlotStartStr) {
+          cancellationCount++;
+        }
+      }
+    }
+
+    if (cancellationCount >= 3) {
+      await User.findByIdAndUpdate(booking.studentUserId, {
+        $set: {
+          isBlocked: true,
+          blockedUntil: null,
+        },
+      });
+
+      await Booking.updateMany(
+        {
+          studentUserId: booking.studentUserId,
+          startTime: { $gt: now },
+          status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.APPROVED, BOOKING_STATUS.AWAITING_CHECKIN] }
+        },
+        {
+          $set: {
+            status: BOOKING_STATUS.CANCELLED_BY_ADMIN,
+            cancelledAt: now,
+            cancellationReason: 'Auto-cancelled due to permanent block (excessive cancellations)'
+          }
+        }
+      );
+    }
+  }
 
   return booking;
 }
@@ -902,6 +971,7 @@ async function createAdminBooking(adminId, adminUsername, body) {
     requestedAt: requestTime,
     approvedAt: requestTime,
     approvedBy: adminId,
+    ...(body.message && { adminNote: body.message }),
   });
 
   return booking;

@@ -1,11 +1,40 @@
 const Booking = require('../models/Booking');
 const { BOOKING_STATUS } = require('../utils/constants');
 const { runCleanup } = require('./cleanup.service');
+const mongoose = require('mongoose');
+
+function expandBookings(bookings) {
+  let expanded = [];
+  for (const b of bookings) {
+    if (b.slotCount === 2 && b.timeSlotIds && b.timeSlotIds.length === 2) {
+      let b1 = { ...b, timeSlotId: b.timeSlotIds[0], timeSlotIds: [b.timeSlotIds[0]], isExpanded: true, expandedSlotIndex: 0 };
+      let b2 = { ...b, timeSlotId: b.timeSlotIds[1], timeSlotIds: [b.timeSlotIds[1]], isExpanded: true, expandedSlotIndex: 1 };
+      
+      if (b.status === BOOKING_STATUS.EARLY_CHECKOUT && b.cancelledAt) {
+        const secondSlotStartStr = b.timeSlotIds[1].split('-')[0];
+        const cancelledIST = new Date(b.cancelledAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+        
+        if (cancelledIST < secondSlotStartStr) {
+          b1.status = BOOKING_STATUS.EARLY_CHECKOUT;
+          b2.status = BOOKING_STATUS.CANCELLED_BY_STUDENT;
+        } else {
+          b1.status = BOOKING_STATUS.EARLY_CHECKOUT;
+          b2.status = BOOKING_STATUS.EARLY_CHECKOUT;
+        }
+      }
+      
+      expanded.push(b1, b2);
+    } else {
+      expanded.push(b);
+    }
+  }
+  return expanded;
+}
 
 /**
  * Get analytics data for a given date range.
  */
-async function getAnalytics(startDate, endDate, search = '') {
+async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
   await runCleanup();
 
   const start = new Date(startDate);
@@ -15,175 +44,87 @@ async function getAnalytics(startDate, endDate, search = '') {
   end.setHours(23, 59, 59, 999);
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
+  
+  if (cabinId) {
+    filter.cabinId = new mongoose.Types.ObjectId(cabinId);
+  }
 
   if (search) {
     filter.$or = [
-      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.name': { $regex: search, $options: 'i' } },
       { 'mainStudent.enrollmentNumber': search },
-      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.name': { $regex: search, $options: 'i' } },
       { 'groupMembers.enrollmentNumber': search }
     ];
   }
 
-  // --- Status counts ---
-  const statusCounts = await Booking.aggregate([
-    { $match: filter },
-    { $group: { _id: '$status', count: { $sum: 1 }, studentCount: { $sum: '$peopleCount' } } },
-  ]);
+  const allBookingsRaw = await Booking.find(filter).populate('cabinId').lean();
+  const allBookings = expandBookings(allBookingsRaw);
 
   const counts = {
-    total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-    auto_rejected: 0,
-    cancelled_by_student: 0,
-    cancelled_by_admin: 0,
-    completed: 0,
-    cancel_requested: 0,
-    awaiting_checkin: 0,
-    checked_in: 0,
-    no_show: 0,
-    early_checkout: 0,
+    total: 0, pending: 0, approved: 0, rejected: 0, auto_rejected: 0,
+    cancelled_by_student: 0, cancelled_by_admin: 0, completed: 0, cancel_requested: 0,
+    awaiting_checkin: 0, checked_in: 0, no_show: 0, early_checkout: 0,
   };
-
   const studentCounts = { ...counts };
 
-  for (const item of statusCounts) {
-    counts[item._id] = item.count;
-    counts.total += item.count;
-    studentCounts[item._id] = item.studentCount || 0;
-    studentCounts.total += item.studentCount || 0;
+  const cabinUsageMap = {};
+  const popularSlotsMap = {};
+
+  let totalApprovalTimeMs = 0;
+  let approvedCount = 0;
+  
+  let totalOccupancyMs = 0;
+  let completedCount = 0;
+
+  for (const b of allBookings) {
+    counts.total += 1;
+    counts[b.status] = (counts[b.status] || 0) + 1;
+    
+    studentCounts.total += b.peopleCount || 0;
+    studentCounts[b.status] = (studentCounts[b.status] || 0) + (b.peopleCount || 0);
+
+    const isUsage = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED, BOOKING_STATUS.AWAITING_CHECKIN, BOOKING_STATUS.CHECKED_IN, BOOKING_STATUS.CANCELLED_BY_ADMIN, BOOKING_STATUS.EARLY_CHECKOUT].includes(b.status);
+    
+    if (isUsage && b.cabinId && b.cabinId._id) {
+      const cid = b.cabinId._id.toString();
+      if (!cabinUsageMap[cid]) {
+        cabinUsageMap[cid] = {
+          _id: b.cabinId._id,
+          cabinCode: b.cabinId.code,
+          cabinName: b.cabinId.name,
+          bookingCount: 0,
+          totalSlots: 0,
+          totalPeople: 0
+        };
+      }
+      cabinUsageMap[cid].bookingCount += 1;
+      cabinUsageMap[cid].totalSlots += 1;
+      cabinUsageMap[cid].totalPeople += b.peopleCount || 0;
+
+      const slot = b.timeSlotId;
+      if (slot) {
+        popularSlotsMap[slot] = (popularSlotsMap[slot] || 0) + 1;
+      }
+    }
+
+    if (b.approvedAt && b.requestedAt && [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED].includes(b.status)) {
+      totalApprovalTimeMs += (new Date(b.approvedAt) - new Date(b.requestedAt));
+      approvedCount++;
+    }
+
+    if (b.completedAt && b.approvedAt && b.status === BOOKING_STATUS.COMPLETED) {
+      totalOccupancyMs += (new Date(b.completedAt) - new Date(b.approvedAt));
+      completedCount++;
+    }
   }
 
-  // --- Cabin-wise usage (only approved + completed bookings count as usage) ---
-  const cabinUsage = await Booking.aggregate([
-    {
-      $match: {
-        ...filter,
-        status: { 
-          $in: [
-            BOOKING_STATUS.APPROVED, 
-            BOOKING_STATUS.COMPLETED,
-            BOOKING_STATUS.AWAITING_CHECKIN,
-            BOOKING_STATUS.CHECKED_IN,
-            BOOKING_STATUS.CANCELLED_BY_ADMIN,
-            BOOKING_STATUS.EARLY_CHECKOUT
-          ] 
-        },
-      },
-    },
-    {
-      $lookup: {
-        from: 'cabins',
-        localField: 'cabinId',
-        foreignField: '_id',
-        as: 'cabin',
-      },
-    },
-    { $unwind: '$cabin' },
-    {
-      $group: {
-        _id: '$cabinId',
-        cabinCode: { $first: '$cabin.code' },
-        cabinName: { $first: '$cabin.name' },
-        bookingCount: { $sum: 1 },
-        totalSlots: { $sum: { $ifNull: ['$slotCount', 1] } },
-        totalPeople: { $sum: '$peopleCount' },
-      },
-    },
-    { $sort: { bookingCount: -1 } },
-  ]);
+  const cabinUsage = Object.values(cabinUsageMap).sort((a, b) => b.bookingCount - a.bookingCount);
+  
+  const popularSlots = Object.keys(popularSlotsMap)
+    .sort((a, b) => a.localeCompare(b))
+    .map(slot => ({ slot, count: popularSlotsMap[slot] }));
 
-  // --- Popular Slots (by timeSlotId) ---
-  const popularSlotsRaw = await Booking.aggregate([
-    {
-      $match: {
-        ...filter,
-        status: { 
-          $in: [
-            BOOKING_STATUS.APPROVED, 
-            BOOKING_STATUS.COMPLETED,
-            BOOKING_STATUS.AWAITING_CHECKIN,
-            BOOKING_STATUS.CHECKED_IN,
-            BOOKING_STATUS.CANCELLED_BY_ADMIN,
-            BOOKING_STATUS.EARLY_CHECKOUT
-          ] 
-        },
-      },
-    },
-    {
-      $addFields: {
-        allSlots: {
-          $cond: {
-            if: { $and: [{ $isArray: '$timeSlotIds' }, { $gt: [{ $size: '$timeSlotIds' }, 0] }] },
-            then: '$timeSlotIds',
-            else: ['$timeSlotId']
-          }
-        }
-      }
-    },
-    { $unwind: '$allSlots' },
-    {
-      $group: {
-        _id: '$allSlots',
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ]);
-
-  const popularSlots = popularSlotsRaw.map((s) => ({
-    slot: s._id,
-    count: s.count,
-  }));
-
-  // --- Average approval time (for approved/completed bookings) ---
-  const avgApprovalTime = await Booking.aggregate([
-    {
-      $match: {
-        ...filter,
-        approvedAt: { $exists: true },
-        status: { $in: [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED] },
-      },
-    },
-    {
-      $project: {
-        approvalTimeMs: { $subtract: ['$approvedAt', '$requestedAt'] },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        avgMs: { $avg: '$approvalTimeMs' },
-      },
-    },
-  ]);
-
-  // --- Average occupancy duration (for completed bookings) ---
-  const avgOccupancy = await Booking.aggregate([
-    {
-      $match: {
-        ...filter,
-        completedAt: { $exists: true },
-        approvedAt: { $exists: true },
-        status: BOOKING_STATUS.COMPLETED,
-      },
-    },
-    {
-      $project: {
-        durationMs: { $subtract: ['$completedAt', '$approvedAt'] },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        avgMs: { $avg: '$durationMs' },
-      },
-    },
-  ]);
-
-  // --- Most used cabin ---
   const mostUsedCabin = cabinUsage.length > 0 ? cabinUsage[0] : null;
 
   return {
@@ -191,10 +132,10 @@ async function getAnalytics(startDate, endDate, search = '') {
     counts,
     studentCounts,
     cabinUsage,
-    peakHours: popularSlots, // rename in frontend later, or keep key as peakHours to avoid massive renaming
+    peakHours: popularSlots, 
     popularSlots,
-    averageApprovalTimeMs: avgApprovalTime.length > 0 ? Math.round(avgApprovalTime[0].avgMs) : null,
-    averageOccupancyDurationMs: avgOccupancy.length > 0 ? Math.round(avgOccupancy[0].avgMs) : null,
+    averageApprovalTimeMs: approvedCount > 0 ? Math.round(totalApprovalTimeMs / approvedCount) : null,
+    averageOccupancyDurationMs: completedCount > 0 ? Math.round(totalOccupancyMs / completedCount) : null,
     mostUsedCabin,
   };
 }
@@ -202,7 +143,7 @@ async function getAnalytics(startDate, endDate, search = '') {
 /**
  * Get detailed bookings for a specific status and date range.
  */
-async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20, search = '') {
+async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20, search = '', cabinId = '') {
   await runCleanup();
 
   const start = new Date(startDate);
@@ -216,12 +157,16 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   if (status && status !== 'total') {
     filter.status = status;
   }
+  
+  if (cabinId) {
+    filter.cabinId = new mongoose.Types.ObjectId(cabinId);
+  }
 
   if (search) {
     filter.$or = [
-      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.name': { $regex: search, $options: 'i' } },
       { 'mainStudent.enrollmentNumber': search },
-      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.name': { $regex: search, $options: 'i' } },
       { 'groupMembers.enrollmentNumber': search }
     ];
   }
@@ -246,7 +191,7 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   const totalStudents = totalStudentsAgg.length > 0 ? totalStudentsAgg[0].totalStudents : 0;
 
   return {
-    bookings,
+    bookings: expandBookings(bookings),
     totalPages: Math.ceil(total / limit),
     currentPage: page,
     totalStudents,
@@ -255,7 +200,7 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
 /**
  * Generate CSV string for analytics download with selectable columns.
  */
-async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses = [], search = '') {
+async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses = [], search = '', cabinId = '') {
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const end = new Date(endDate);
@@ -265,20 +210,25 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
   if (statuses && statuses.length > 0 && !statuses.includes('total')) {
     filter.status = { $in: statuses };
   }
+  if (cabinId) {
+    filter.cabinId = new mongoose.Types.ObjectId(cabinId);
+  }
   if (search) {
     filter.$or = [
-      { 'mainStudent.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'mainStudent.name': { $regex: search, $options: 'i' } },
       { 'mainStudent.enrollmentNumber': search },
-      { 'groupMembers.name': { $regex: `^${search}$`, $options: 'i' } },
+      { 'groupMembers.name': { $regex: search, $options: 'i' } },
       { 'groupMembers.enrollmentNumber': search },
     ];
   }
 
-  const bookings = await Booking.find(filter)
+  const rawBookings = await Booking.find(filter)
     .populate('studentUserId', 'name email')
     .populate('cabinId', 'name code')
     .sort({ requestedAt: -1 })
     .lean();
+
+  const bookings = expandBookings(rawBookings);
 
   // All possible columns and their extractors
   const COLUMN_MAP = {

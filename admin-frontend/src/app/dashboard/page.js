@@ -437,6 +437,7 @@ export default function AdminDashboardPage() {
                     )}
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
+                    {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
                     <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
                     {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
                     {detailBooking.checkedInAt && <div><strong>Checked In:</strong> {new Date(detailBooking.checkedInAt).toLocaleString()}</div>}
