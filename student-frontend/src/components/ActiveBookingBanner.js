@@ -155,7 +155,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
       {confirmCancel && (
         <ConfirmDialog
           title="Cancel Booking"
-          message="Are you sure you want to cancel this booking? WARNING: Since this booking has already been approved, cancelling it now will STILL count against your daily quota limit (2 slots max). You will NOT get this quota back for today."
+          message="Are you sure you want to cancel this booking? Note: Your daily slot quota will be returned to you, but cancelling an approved booking counts towards your weekly cancellation limit (max 3 per week before a penalty is applied)."
           confirmLabel="Cancel Booking"
           confirmClass="btn-danger"
           onConfirm={async () => {

@@ -169,10 +169,6 @@ async function createBookingRequest(userId, body) {
                 BOOKING_STATUS.EARLY_CHECKOUT,
               ],
             },
-          },
-          {
-            status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
-            approvedAt: { $exists: true, $ne: null },
           }
         ]
       },
@@ -353,10 +349,6 @@ async function getMyActiveBookings(userId) {
             BOOKING_STATUS.EARLY_CHECKOUT,
           ],
         },
-      },
-      {
-        status: BOOKING_STATUS.CANCELLED_BY_STUDENT,
-        approvedAt: { $exists: true, $ne: null },
       }
     ]
   }).select('slotCount').lean();
