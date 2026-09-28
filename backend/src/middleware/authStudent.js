@@ -38,13 +38,6 @@ async function authStudent(req, res, next) {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    if (user.isBlocked) {
-      return res.status(403).json({ error: 'Your account is permanently blocked. Contact administration.' });
-    }
-
-    if (user.blockedUntil && user.blockedUntil > new Date()) {
-      return res.status(403).json({ error: `Your account is temporarily blocked until ${user.blockedUntil.toLocaleString()} due to a missed check-in.` });
-    }
 
     req.user = user;
     next();

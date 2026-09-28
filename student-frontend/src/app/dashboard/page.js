@@ -178,13 +178,13 @@ export default function DashboardPage() {
           <h3>Library Cabin Booking Rules</h3>
           <ul>
             <li>Cabins can be booked for the current day only. The booking portal unlocks 30 minutes before the library's first available slot of the day.</li>
-            <li>A Student can book a maximum of 2 slots in a day.</li>
-            <li>Each slot must be approved by an admin within 15 mins of the request.</li>
-            <li>Students must check-in within 10 mins of the slot start time.</li>
-            <li>Missing check-in results in a two-day temporary block.</li>
-            <li>Cancelling an approved booking 3 times in a week results in a permanent block.</li>
-            <li>To appeal a permanent block, you must meet with the library team.</li>
-            <li>If you are leaving the cabin before your booked time slot ends, please inform the library team for checkout.</li>
+            <li>A student can book a maximum of 2 slots in a day.</li>
+            <li><strong>Group Bookings:</strong> If a cabin requires multiple people, you must share the invite link or QR code with your group. All members must join within 10 minutes, or the request will expire.</li>
+            <li><strong>Auto-Approval:</strong> Bookings are automatically approved immediately (or as soon as all group members join).</li>
+            <li>Students must physically check-in at the library desk within 10 minutes of the slot start time.</li>
+            <li><strong>Penalties:</strong> Missing a check-in results in an automatic 2-day temporary block.</li>
+            <li>Cancelling an approved booking 3 times in a week results in a permanent block. (Cancelling a pending group invite does <em>not</em> count as a strike).</li>
+            <li>If you are leaving the cabin before your booked time slot ends, please inform the library team for an early checkout.</li>
           </ul>
         </div>
 

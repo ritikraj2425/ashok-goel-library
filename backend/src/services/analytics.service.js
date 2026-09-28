@@ -155,10 +155,6 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
   end.setHours(23, 59, 59, 999);
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
-
-  if (status && status !== 'total') {
-    filter.status = status;
-  }
   
   if (cabinId) {
     filter.cabinId = new mongoose.Types.ObjectId(cabinId);
@@ -171,27 +167,25 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
     ];
   }
 
+  const rawBookings = await Booking.find(filter)
+    .populate('studentUserId', 'name email')
+    .populate('cabinId', 'name code')
+    .sort({ requestedAt: -1 })
+    .lean();
+
+  let expanded = expandBookings(rawBookings);
+
+  if (status && status !== 'total') {
+    expanded = expanded.filter(b => b.status === status);
+  }
+
   const skip = (page - 1) * limit;
-
-  const [bookings, total, totalStudentsAgg] = await Promise.all([
-    Booking.find(filter)
-      .populate('studentUserId', 'name email')
-      .populate('cabinId', 'name code')
-      .sort({ requestedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Booking.countDocuments(filter),
-    Booking.aggregate([
-      { $match: filter },
-      { $group: { _id: null, totalStudents: { $sum: '$peopleCount' } } }
-    ])
-  ]);
-
-  const totalStudents = totalStudentsAgg.length > 0 ? totalStudentsAgg[0].totalStudents : 0;
+  const paginatedBookings = expanded.slice(skip, skip + limit);
+  const total = expanded.length;
+  const totalStudents = expanded.reduce((sum, b) => sum + (b.peopleCount || 0), 0);
 
   return {
-    bookings: expandBookings(bookings),
+    bookings: paginatedBookings,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
     totalStudents,
@@ -207,9 +201,7 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
   end.setHours(23, 59, 59, 999);
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
-  if (statuses && statuses.length > 0 && !statuses.includes('total')) {
-    filter.status = { $in: statuses };
-  }
+  
   if (cabinId) {
     filter.cabinId = new mongoose.Types.ObjectId(cabinId);
   }
@@ -226,7 +218,11 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     .sort({ requestedAt: -1 })
     .lean();
 
-  const bookings = expandBookings(rawBookings);
+  let bookings = expandBookings(rawBookings);
+
+  if (statuses && statuses.length > 0 && !statuses.includes('total')) {
+    bookings = bookings.filter(b => statuses.includes(b.status));
+  }
 
   // All possible columns and their extractors
   const COLUMN_MAP = {

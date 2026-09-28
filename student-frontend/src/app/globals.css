@@ -782,10 +782,13 @@ button {
   }
 
   .mobile-menu-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
-    font-size: 24px;
+    color: var(--color-text-primary);
+    padding: var(--space-xs);
     cursor: pointer;
   }
 
