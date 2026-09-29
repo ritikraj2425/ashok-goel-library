@@ -16,6 +16,34 @@ function createError(message, statusCode = 400) {
   return err;
 }
 
+// --- Slot-level mutex to prevent race conditions ---
+const slotLocks = new Map();
+
+function getSlotLockKey(cabinId, dateString, slotId) {
+  return `${cabinId}:${dateString}:${slotId}`;
+}
+
+async function acquireSlotLock(keys) {
+  // Wait until all keys are free, then lock them
+  const maxWait = 5000; // 5s max wait
+  const start = Date.now();
+  while (true) {
+    const allFree = keys.every(k => !slotLocks.has(k));
+    if (allFree) {
+      keys.forEach(k => slotLocks.set(k, Date.now()));
+      return;
+    }
+    if (Date.now() - start > maxWait) {
+      throw createError('This slot is currently being booked by another user. Please try again.');
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+function releaseSlotLock(keys) {
+  keys.forEach(k => slotLocks.delete(k));
+}
+
 /**
  * Create a new booking request.
  * Enforces ALL booking rules atomically.
@@ -192,99 +220,115 @@ async function createBookingRequest(userId, body) {
   }
 
 
+  // --- Acquire slot lock to prevent race conditions ---
+  const lockKeys = allSlotDetails.map(s => getSlotLockKey(cabin._id.toString(), s.dateString, s.id));
+  await acquireSlotLock(lockKeys);
 
-  // --- Check all requested slots for conflicts ---
-  for (const slotDetail of allSlotDetails) {
-    // --- Rule 3: User cannot book overlapping slots ---
-    const userOverlappingBooking = await Booking.findOne({
-      studentUserId: userId,
-      bookingDate: slotDetail.dateString,
-      status: { $in: ACTIVE_STATUSES },
-      $or: [
-        { timeSlotId: slotDetail.id },
-        { timeSlotIds: slotDetail.id },
-      ],
-    });
-    if (userOverlappingBooking) {
-      throw createError(`You already have an active booking or request for time slot ${slotDetail.id}`);
+  try {
+    // --- Check all requested slots for conflicts ---
+    for (const slotDetail of allSlotDetails) {
+      // --- Rule 3: User cannot book overlapping slots ---
+      const userOverlappingBooking = await Booking.findOne({
+        studentUserId: userId,
+        bookingDate: slotDetail.dateString,
+        status: { $in: ACTIVE_STATUSES },
+        $or: [
+          { timeSlotId: slotDetail.id },
+          { timeSlotIds: slotDetail.id },
+        ],
+      });
+      if (userOverlappingBooking) {
+        throw createError(`You already have an active booking or request for time slot ${slotDetail.id}`);
+      }
+
+      // --- Rule 2: Cabin can have only one active booking for THIS SLOT ---
+      const existingCabinBooking = await Booking.findOne({
+        cabinId: cabin._id,
+        bookingDate: slotDetail.dateString,
+        status: { $in: ACTIVE_STATUSES },
+        $or: [
+          { timeSlotId: slotDetail.id },
+          { timeSlotIds: slotDetail.id },
+        ],
+      });
+      if (existingCabinBooking) {
+        throw createError(`This cabin is already booked or requested for time slot ${slotDetail.id}`);
+      }
+
+
+
+      // --- Rule 8: Phone number cannot be in another active booking for THIS SLOT ---
+      const phoneConflict = await Booking.findOne({
+        bookingDate: slotDetail.dateString,
+        status: { $in: ACTIVE_STATUSES },
+        $or: [
+          { timeSlotId: slotDetail.id },
+          { timeSlotIds: slotDetail.id },
+        ],
+        'mainStudent.phoneNumber': normalizedMain.phoneNumber,
+      });
+      if (phoneConflict) {
+        throw createError(`Phone number is already used in an active booking for time slot ${slotDetail.id}`);
+      }
     }
 
-    // --- Rule 2: Cabin can have only one active booking for THIS SLOT ---
-    const existingCabinBooking = await Booking.findOne({
+    // --- Create the booking ---
+    const requestTime = new Date();
+
+    // Determine initial status based on user type and people count
+    const isGroupBooking = userType === 'student' && peopleCount > 1;
+    const crypto = require('crypto');
+
+    const bookingData = {
       cabinId: cabin._id,
-      bookingDate: slotDetail.dateString,
-      status: { $in: ACTIVE_STATUSES },
-      $or: [
-        { timeSlotId: slotDetail.id },
-        { timeSlotIds: slotDetail.id },
-      ],
-    });
-    if (existingCabinBooking) {
-      throw createError(`This cabin is already booked or requested for time slot ${slotDetail.id}`);
+      studentUserId: userId,
+      userType,
+      mainStudent: normalizedMain,
+      groupMembers: normalizedGroupMembers,
+      peopleCount,
+      bookingDate: primarySlotDetails.dateString,
+      timeSlotId: resolvedSlotIds[0],
+      timeSlotIds: resolvedSlotIds,
+      slotCount,
+      startTime: primarySlotDetails.startTime,
+      endTime: mergedEndTime,
+      requestedAt: requestTime,
+    };
+
+    if (isGroupBooking) {
+      // New flow: PENDING_MEMBERS with join token
+      bookingData.status = BOOKING_STATUS.PENDING_MEMBERS;
+      bookingData.joinToken = crypto.randomBytes(16).toString('hex');
+      bookingData.joinExpiresAt = new Date(requestTime.getTime() + TIMING.JOIN_EXPIRY_MS);
+      bookingData.joinedMembers = [];
+      bookingData.groupMembers = []; // Clear legacy group members for new flow
+    } else {
+      // Solo booking or faculty: auto approve
+      bookingData.status = BOOKING_STATUS.APPROVED;
+      bookingData.approvedAt = requestTime;
+      bookingData.expiresAt = mergedEndTime;
+      bookingData.checkInDeadlineAt = new Date(
+        Math.min(
+          Math.max(now.getTime(), primarySlotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
+          mergedEndTime.getTime()
+        )
+      );
     }
 
-
-
-    // --- Rule 8: Phone number cannot be in another active booking for THIS SLOT ---
-    const phoneConflict = await Booking.findOne({
-      bookingDate: slotDetail.dateString,
-      status: { $in: ACTIVE_STATUSES },
-      $or: [
-        { timeSlotId: slotDetail.id },
-        { timeSlotIds: slotDetail.id },
-      ],
-      'mainStudent.phoneNumber': normalizedMain.phoneNumber,
-    });
-    if (phoneConflict) {
-      throw createError(`Phone number is already used in an active booking for time slot ${slotDetail.id}`);
+    let booking;
+    try {
+      booking = await Booking.create(bookingData);
+    } catch (err) {
+      if (err.code === 11000) {
+        throw createError('This cabin slot was just booked by someone else. Please choose a different slot.');
+      }
+      throw err;
     }
+
+    return booking;
+  } finally {
+    releaseSlotLock(lockKeys);
   }
-
-  // --- Create the booking ---
-  const requestTime = new Date();
-
-  // Determine initial status based on user type and people count
-  const isGroupBooking = userType === 'student' && peopleCount > 1;
-  const crypto = require('crypto');
-
-  const bookingData = {
-    cabinId: cabin._id,
-    studentUserId: userId,
-    userType,
-    mainStudent: normalizedMain,
-    groupMembers: normalizedGroupMembers,
-    peopleCount,
-    bookingDate: primarySlotDetails.dateString,
-    timeSlotId: resolvedSlotIds[0],
-    timeSlotIds: resolvedSlotIds,
-    slotCount,
-    startTime: primarySlotDetails.startTime,
-    endTime: mergedEndTime,
-    requestedAt: requestTime,
-  };
-
-  if (isGroupBooking) {
-    // New flow: PENDING_MEMBERS with join token
-    bookingData.status = BOOKING_STATUS.PENDING_MEMBERS;
-    bookingData.joinToken = crypto.randomBytes(16).toString('hex');
-    bookingData.joinExpiresAt = new Date(requestTime.getTime() + TIMING.JOIN_EXPIRY_MS);
-    bookingData.joinedMembers = [];
-    bookingData.groupMembers = []; // Clear legacy group members for new flow
-  } else {
-    // Solo booking or faculty: auto approve
-    bookingData.status = BOOKING_STATUS.APPROVED;
-    bookingData.approvedAt = requestTime;
-    bookingData.checkInDeadlineAt = new Date(
-      Math.min(
-        Math.max(now.getTime(), primarySlotDetails.startTime.getTime()) + TIMING.CHECKIN_TIMEOUT_MS,
-        mergedEndTime.getTime()
-      )
-    );
-  }
-
-  const booking = await Booking.create(bookingData);
-
-  return booking;
 }
 
 

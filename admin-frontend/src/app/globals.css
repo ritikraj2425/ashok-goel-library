@@ -229,9 +229,12 @@ button { font-family:var(--font-family); cursor:pointer; border:none; background
   font-size: var(--font-size-md);
 }
 .mobile-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
-  font-size: 24px;
+  padding: 4px;
   cursor: pointer;
   color: var(--color-text-primary);
 }

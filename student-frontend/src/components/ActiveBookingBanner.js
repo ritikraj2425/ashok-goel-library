@@ -120,24 +120,40 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
           <span className="label">Time Slot</span>
           {formatTimeSlot(booking)}
         </div>
-        {(!isPending && !isPendingMembers && !hasStarted) ? (
+        {isPending ? (
+          <div className="booking-detail">
+            <span className="label">Auto-rejection in</span>
+            <CountdownTimer targetDate={booking.approvalDeadlineAt} />
+          </div>
+        ) : isPendingMembers ? (
+          <div className="booking-detail">
+            <span className="label">Invite expires in</span>
+            <CountdownTimer targetDate={booking.joinExpiresAt} />
+          </div>
+        ) : isAwaitingCheckin ? (
+          <div className="booking-detail">
+            <span className="label">Check-in deadline</span>
+            <CountdownTimer targetDate={booking.checkInDeadlineAt} />
+          </div>
+        ) : isCheckedIn ? (
+          <div className="booking-detail">
+            <span className="label">Session ends in</span>
+            <CountdownTimer targetDate={booking.expiresAt} />
+          </div>
+        ) : isApproved && !hasStarted ? (
           <div className="booking-detail">
             <span className="label">Starts at</span>
             <span>{new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
+        ) : isApproved && hasStarted ? (
+          <div className="booking-detail">
+            <span className="label">Check-in deadline</span>
+            <CountdownTimer targetDate={booking.checkInDeadlineAt} />
+          </div>
         ) : (
           <div className="booking-detail">
-            <span className="label">
-              {isPending ? 'Auto-rejection in' : isPendingMembers ? 'Invite expires in' : isAwaitingCheckin ? 'Check-in deadline in' : 'Time remaining'}
-            </span>
-            <CountdownTimer
-              targetDate={
-                isPending ? booking.approvalDeadlineAt :
-                isPendingMembers ? booking.joinExpiresAt :
-                isAwaitingCheckin ? booking.checkInDeadlineAt :
-                booking.expiresAt
-              }
-            />
+            <span className="label">Time remaining</span>
+            <CountdownTimer targetDate={booking.expiresAt} />
           </div>
         )}
       </div>
