@@ -224,12 +224,32 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     bookings = bookings.filter(b => statuses.includes(b.status));
   }
 
+  // Helper: format a Date to IST string for CSV
+  const formatDateIST = (d) => {
+    if (!d) return '';
+    const date = new Date(d);
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
   // All possible columns and their extractors
   const COLUMN_MAP = {
     date: { header: 'Date', extract: (b) => b.bookingDate || '' },
     slot: { 
       header: 'Time Slot', 
       extract: (b) => {
+        // For expanded bookings, show only the individual slot
+        if (b.isExpanded) {
+          return b.timeSlotId || '';
+        }
         if (b.timeSlotIds && b.timeSlotIds.length > 1) {
           const first = b.timeSlotIds[0].split('-')[0];
           const last = b.timeSlotIds[b.timeSlotIds.length - 1].split('-')[1];
@@ -242,17 +262,26 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     cabin_code: { header: 'Cabin Code', extract: (b) => b.cabinId?.code || '' },
     student_name: { header: 'Student Name', extract: (b) => b.mainStudent?.name || '' },
     enrollment_no: { header: 'Enrollment No', extract: (b) => b.mainStudent?.enrollmentNumber || '' },
-    
     phone: { header: 'Phone', extract: (b) => b.mainStudent?.phoneNumber || '' },
     email: { header: 'Email', extract: (b) => b.studentUserId?.email || '' },
-    people_count: { header: 'People Count', extract: (b) => b.peopleCount || '' },
+    people_count: { header: 'People Count', extract: (b) => b.peopleCount != null ? String(b.peopleCount) : '' },
     group_members: {
       header: 'Group Members',
       extract: (b) => {
+        // New flow: joinedMembers with name + email
         if (b.joinedMembers && b.joinedMembers.length > 0) {
           return b.joinedMembers.map((m) => `${m.name} (${m.email})`).join('; ');
         }
-        return (b.groupMembers || []).map((m) => m.name).join('; ');
+        // Old flow: groupMembers with name + enrollmentNumber
+        if (b.groupMembers && b.groupMembers.length > 0) {
+          return b.groupMembers.map((m) => {
+            if (m.enrollmentNumber) {
+              return `${m.name} (${m.enrollmentNumber})`;
+            }
+            return m.name;
+          }).join('; ');
+        }
+        return '';
       },
     },
     status: {
@@ -260,17 +289,17 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
       extract: (b) =>
         (b.status || '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
     },
-    requested_at: { header: 'Requested At', extract: (b) => b.requestedAt ? new Date(b.requestedAt).toLocaleString() : '' },
-    approved_at: { header: 'Approved At', extract: (b) => b.approvedAt ? new Date(b.approvedAt).toLocaleString() : '' },
-    checked_in_at: { header: 'Checked In At', extract: (b) => b.checkedInAt ? new Date(b.checkedInAt).toLocaleString() : '' },
-    completed_at: { header: 'Completed At', extract: (b) => b.completedAt ? new Date(b.completedAt).toLocaleString() : '' },
+    requested_at: { header: 'Requested At', extract: (b) => formatDateIST(b.requestedAt) },
+    approved_at: { header: 'Approved At', extract: (b) => formatDateIST(b.approvedAt) },
+    checked_in_at: { header: 'Checked In At', extract: (b) => formatDateIST(b.checkedInAt) },
+    completed_at: { header: 'Completed At', extract: (b) => formatDateIST(b.completedAt) },
     cancellation_reason: { header: 'Cancellation Reason', extract: (b) => b.cancellationReason || b.rejectionReason || '' },
   };
 
   // If no columns specified, use a sensible default set
   const selectedColumns = columns && columns.length > 0
     ? columns.filter((c) => COLUMN_MAP[c])
-    : ['date', 'slot', 'cabin', 'student_name', 'enrollment', 'phone', 'status'];
+    : ['date', 'slot', 'cabin', 'student_name', 'enrollment_no', 'phone', 'status'];
 
   // Build CSV
   const escapeCSV = (val) => {
@@ -286,7 +315,7 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     selectedColumns.map((c) => escapeCSV(COLUMN_MAP[c].extract(b))).join(',')
   );
 
-  // Compute summary statistics
+  // Compute summary statistics (avoid double-counting people for expanded slots)
   const summaryCounts = {};
   const summaryStudents = {};
   let totalBookings = 0;
@@ -295,9 +324,16 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
   for (const b of bookings) {
     const s = b.status || 'unknown';
     summaryCounts[s] = (summaryCounts[s] || 0) + 1;
-    summaryStudents[s] = (summaryStudents[s] || 0) + (b.peopleCount || 0);
     totalBookings++;
-    totalStudents += (b.peopleCount || 0);
+    // Only count students once per original booking (not per expanded slot)
+    if (!b.isExpanded || b.expandedSlotIndex === 0) {
+      const pc = b.peopleCount || 0;
+      summaryStudents[s] = (summaryStudents[s] || 0) + pc;
+      totalStudents += pc;
+    } else {
+      // Ensure key exists even if we don't add to the count
+      summaryStudents[s] = summaryStudents[s] || 0;
+    }
   }
 
   const formatStatus = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());

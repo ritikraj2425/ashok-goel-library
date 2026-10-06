@@ -160,7 +160,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
 
       {(isApproved || isAwaitingCheckin) && (
         <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-sm)', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-sm)', fontWeight: 500, borderLeft: '3px solid var(--color-error)' }}>
-          <strong style={{ color: 'var(--color-error)' }}>Important:</strong> Student must do check-in within 10 mins from the time the time slot starts.
+          <strong style={{ color: 'var(--color-error)' }}>Important:</strong> Student must ask the librarian for check-in within 10 mins from the time the time slot starts.
         </div>
       )}
 
