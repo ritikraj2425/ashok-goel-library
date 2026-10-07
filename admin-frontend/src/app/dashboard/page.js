@@ -56,6 +56,18 @@ const renderSlotCountTag = (booking) => {
   return null;
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function AdminDashboardPage() {
   const { admin, loading: authLoading } = useAdminAuth();
   const router = useRouter();
@@ -241,6 +253,11 @@ export default function AdminDashboardPage() {
                       <span className="label">Ends in</span>
                       <CountdownTimer targetDate={booking.endTime} />
                     </div>
+                    {booking.checkedInBy?.username && (
+                      <div className="booking-card-detail" style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
+                        <span className="label">Checked in by:</span> {booking.checkedInBy.username}
+                      </div>
+                    )}
                   </div>
                   <div className="booking-card-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="btn btn-danger btn-sm" onClick={() => handleCheckout(booking._id)}>Checkout</button>
@@ -376,9 +393,21 @@ export default function AdminDashboardPage() {
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                     {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
-                    <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
-                    {detailBooking.checkedInAt && <div><strong>Checked In:</strong> {new Date(detailBooking.checkedInAt).toLocaleString()}</div>}
-                    {detailBooking.cancelRequestedAt && <div><strong>Cancel Requested:</strong> {new Date(detailBooking.cancelRequestedAt).toLocaleString()}</div>}
+                    
+                    <div style={{ marginTop: 'var(--space-sm)', paddingTop: 'var(--space-sm)', borderTop: '1px solid var(--color-border)' }}>
+                      <strong>Audit Trail:</strong>
+                      <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                        <li>Requested: {formatDate(detailBooking.requestedAt)}</li>
+                        {detailBooking.approvedAt && <li>Approved: {formatDate(detailBooking.approvedAt)} (Auto)</li>}
+                        {detailBooking.checkedInAt && <li>Checked In: {formatDate(detailBooking.checkedInAt)} {detailBooking.checkedInBy?.username ? `by ${detailBooking.checkedInBy.username}` : ''}</li>}
+                        {detailBooking.completedAt && <li>Completed: {formatDate(detailBooking.completedAt)}</li>}
+                        {detailBooking.rejectedAt && <li>Rejected: {formatDate(detailBooking.rejectedAt)} {detailBooking.rejectedBy?.username ? `by ${detailBooking.rejectedBy.username}` : ''}</li>}
+                        {detailBooking.cancelRequestedAt && <li>Cancel Requested: {formatDate(detailBooking.cancelRequestedAt)}</li>}
+                        {detailBooking.cancelledAt && <li>{detailBooking.status === 'early_checkout' ? 'Checked Out Early' : 'Cancelled'}: {formatDate(detailBooking.cancelledAt)} {detailBooking.cancelledBy?.username ? `by ${detailBooking.cancelledBy.username}` : ''}</li>}
+                        {detailBooking.noShowAt && <li>Marked No-show: {formatDate(detailBooking.noShowAt)} (Auto)</li>}
+                      </ul>
+                    </div>
+
                     {detailBooking.studentUserId && <div><strong>Account:</strong> {detailBooking.studentUserId.email}</div>}
                   </div>
                 )}

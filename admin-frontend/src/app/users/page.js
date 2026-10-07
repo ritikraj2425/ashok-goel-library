@@ -7,6 +7,18 @@ import { getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } from
 import Sidebar from '@/components/Sidebar';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function UsersPage() {
   const { admin, loading: authLoading } = useAdminAuth();
   const router = useRouter();
@@ -159,7 +171,7 @@ export default function UsersPage() {
                   <td><strong>{a.username}</strong></td>
                   <td><span className={`badge ${a.role === 'root' ? 'badge-root' : 'badge-completed'}`}>{a.role}</span></td>
                   <td><span className={`badge ${a.isActive ? 'badge-available' : 'badge-inactive'}`}>{a.isActive ? 'Active' : 'Inactive'}</span></td>
-                  <td style={{ fontSize: 'var(--font-size-xs)' }}>{a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleString() : 'Never'}</td>
+                  <td style={{ fontSize: 'var(--font-size-xs)' }}>{a.lastLoginAt ? formatDate(a.lastLoginAt) : 'Never'}</td>
                   <td>
                     {a.role !== 'root' && (
                       <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>

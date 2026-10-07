@@ -843,6 +843,7 @@ async function getAdminDashboard() {
     Booking.find({ status: BOOKING_STATUS.CHECKED_IN })
       .populate('cabinId', 'code name')
       .populate('studentUserId', 'email name')
+      .populate('checkedInBy', 'username')
       .sort({ checkedInAt: 1 })
       .lean(),
 

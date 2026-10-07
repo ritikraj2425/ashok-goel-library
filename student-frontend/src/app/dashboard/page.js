@@ -12,6 +12,18 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 
 const POLL_INTERVAL = 20000; // 20 seconds
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -120,7 +132,7 @@ export default function DashboardPage() {
           </div>
         ) : user?.blockedUntil && new Date(user.blockedUntil) > new Date() ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
-            <strong>Account Temporarily Blocked:</strong> Due to a missed check-in, you are blocked from booking cabins until {new Date(user.blockedUntil).toLocaleString()}.
+            <strong>Account Temporarily Blocked:</strong> Due to a missed check-in, you are blocked from booking cabins until {formatDate(user.blockedUntil)}.
           </div>
         ) : null}
 

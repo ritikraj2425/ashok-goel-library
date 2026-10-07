@@ -44,6 +44,18 @@ const formatBookingTimeSlot = (booking) => {
   return formatTimeSlot(booking.timeSlotId);
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 const statusMap = {
   pending: { label: 'Pending', className: 'badge-pending' },
   pending_members: { label: 'Waiting for Group', className: 'badge-warning' },
@@ -531,9 +543,20 @@ export default function AnalyticsPage() {
                     {detailBooking.rejectionReason && <div><strong>Rejection Reason:</strong> {detailBooking.rejectionReason}</div>}
                     {detailBooking.cancellationReason && <div><strong>Cancellation Reason:</strong> {detailBooking.cancellationReason}</div>}
                     {detailBooking.adminNote && <div><strong>Admin Note:</strong> {detailBooking.adminNote}</div>}
-                    <div><strong>Requested:</strong> {new Date(detailBooking.requestedAt).toLocaleString()}</div>
-                    {detailBooking.approvedAt && <div><strong>Approved:</strong> {new Date(detailBooking.approvedAt).toLocaleString()}</div>}
-                    {detailBooking.expiresAt && <div><strong>Expires:</strong> {new Date(detailBooking.expiresAt).toLocaleString()}</div>}
+                    <div style={{ marginTop: 'var(--space-sm)', paddingTop: 'var(--space-sm)', borderTop: '1px solid var(--color-border)' }}>
+                      <strong>Audit Trail:</strong>
+                      <ul style={{ paddingLeft: 'var(--space-lg)', marginTop: 'var(--space-xs)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                        <li>Requested: {formatDate(detailBooking.requestedAt)}</li>
+                        {detailBooking.approvedAt && <li>Approved: {formatDate(detailBooking.approvedAt)} (Auto)</li>}
+                        {detailBooking.checkedInAt && <li>Checked In: {formatDate(detailBooking.checkedInAt)} {detailBooking.checkedInBy?.username ? `by ${detailBooking.checkedInBy.username}` : ''}</li>}
+                        {detailBooking.completedAt && <li>Completed: {formatDate(detailBooking.completedAt)}</li>}
+                        {detailBooking.rejectedAt && <li>Rejected: {formatDate(detailBooking.rejectedAt)} {detailBooking.rejectedBy?.username ? `by ${detailBooking.rejectedBy.username}` : ''}</li>}
+                        {detailBooking.cancelRequestedAt && <li>Cancel Requested: {formatDate(detailBooking.cancelRequestedAt)}</li>}
+                        {detailBooking.cancelledAt && <li>{detailBooking.status === 'early_checkout' ? 'Checked Out Early' : 'Cancelled'}: {formatDate(detailBooking.cancelledAt)} {detailBooking.cancelledBy?.username ? `by ${detailBooking.cancelledBy.username}` : ''}</li>}
+                        {detailBooking.noShowAt && <li>Marked No-show: {formatDate(detailBooking.noShowAt)} (Auto)</li>}
+                      </ul>
+                    </div>
+                    {detailBooking.expiresAt && <div><strong>Expires:</strong> {formatDate(detailBooking.expiresAt)}</div>}
                     {detailBooking.studentUserId && <div><strong>Account:</strong> {detailBooking.studentUserId.email}</div>}
                   </div>
                 )}
@@ -624,7 +647,7 @@ export default function AnalyticsPage() {
                                 ? b.joinedMembers.map(m => m.name).join(', ') 
                                 : (b.groupMembers || []).map(m => m.name).join(', ');
                               else if (k === 'status') val = b.status?.replace(/_/g, ' ');
-                              else if (k === 'requested_at') val = b.requestedAt ? new Date(b.requestedAt).toLocaleString() : '';
+                              else if (k === 'requested_at') val = b.requestedAt ? formatDate(b.requestedAt) : '';
                               return <td key={k} style={{ whiteSpace: 'nowrap' }}>{val || '-'}</td>;
                             })}
                           </tr>

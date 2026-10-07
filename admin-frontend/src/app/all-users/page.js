@@ -5,6 +5,18 @@ import { useAdminAuth } from '@/lib/auth';
 import { getAllStudents } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function AllUsersPage() {
   const { admin, loading: authLoading } = useAdminAuth();
 
@@ -99,6 +111,7 @@ export default function AllUsersPage() {
                       <th>Name</th>
                       <th>Email</th>
                       <th>Status</th>
+                      <th style={{ width: '180px' }}>Signed Up</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -115,6 +128,7 @@ export default function AllUsersPage() {
                           <td>{student.name}</td>
                           <td>{student.email}</td>
                           <td>{statusBadge}</td>
+                          <td style={{ fontSize: 'var(--font-size-xs)' }}>{formatDate(student.createdAt)}</td>
                         </tr>
                       );
                     })}

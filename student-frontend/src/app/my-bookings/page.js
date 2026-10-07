@@ -72,10 +72,11 @@ export default function MyBookingsPage() {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleString('en-IN', {
       day: '2-digit',
-      month: 'short',
+      month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -175,8 +176,13 @@ export default function MyBookingsPage() {
                 
                 <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--space-sm) 0' }}></div>
                 
-                <div><strong>Requested At:</strong> {formatDate(selectedBooking.requestedAt)}</div>
-                {selectedBooking.approvedAt && <div><strong>Approved At:</strong> {formatDate(selectedBooking.approvedAt)}</div>}
+                <div><strong>Requested:</strong> {formatDate(selectedBooking.requestedAt)}</div>
+                {selectedBooking.approvedAt && <div><strong>Approved:</strong> {formatDate(selectedBooking.approvedAt)} (Auto)</div>}
+                {selectedBooking.checkedInAt && <div><strong>Checked In:</strong> {formatDate(selectedBooking.checkedInAt)}</div>}
+                {selectedBooking.completedAt && <div><strong>Completed:</strong> {formatDate(selectedBooking.completedAt)}</div>}
+                {selectedBooking.rejectedAt && <div><strong>Rejected:</strong> {formatDate(selectedBooking.rejectedAt)}</div>}
+                {selectedBooking.cancelledAt && <div><strong>{selectedBooking.status === 'early_checkout' ? 'Checked Out Early' : 'Cancelled'}:</strong> {formatDate(selectedBooking.cancelledAt)}</div>}
+                {selectedBooking.noShowAt && <div><strong>Marked No-show:</strong> {formatDate(selectedBooking.noShowAt)} (Auto)</div>}
                 
                 {(selectedBooking.rejectionReason || selectedBooking.cancellationReason) && (
                   <div>

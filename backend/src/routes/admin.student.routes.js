@@ -68,7 +68,7 @@ router.get('/blocked', async (req, res, next) => {
 
     const [blockedStudents, total] = await Promise.all([
       User.find(filter)
-        .select('name email isBlocked blockedUntil')
+        .select('name email isBlocked blockedUntil blockedAt')
         .skip(skip)
         .limit(limitNum)
         .lean(),
@@ -124,7 +124,7 @@ router.post('/block', async (req, res, next) => {
 
     const student = await User.findOneAndUpdate(
       { email: email.toLowerCase() },
-      { $set: { isBlocked: true } },
+      { $set: { isBlocked: true, blockedAt: new Date() } },
       { new: true }
     );
 
@@ -166,7 +166,7 @@ router.post('/:id/unblock', async (req, res, next) => {
       req.params.id,
       {
         $set: { isBlocked: false },
-        $unset: { blockedUntil: 1 }
+        $unset: { blockedUntil: 1, blockedAt: 1 }
       },
       { new: true }
     );

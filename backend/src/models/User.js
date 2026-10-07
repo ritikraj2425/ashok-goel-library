@@ -32,6 +32,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  blockedAt: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -48,6 +52,7 @@ userSchema.methods.toPublic = function () {
     name: this.name,
     isBlocked: this.isBlocked,
     blockedUntil: this.blockedUntil,
+    blockedAt: this.blockedAt,
     phoneNumber: this.phoneNumber,
     createdAt: this.createdAt,
     lastLoginAt: this.lastLoginAt,

@@ -6,6 +6,18 @@ import { getBlockedStudents, unblockStudent, blockStudent, searchStudents } from
 import Sidebar from '@/components/Sidebar';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 export default function BlockedStudentsPage() {
   const { admin, loading: authLoading } = useAdminAuth();
 
@@ -195,7 +207,8 @@ export default function BlockedStudentsPage() {
                       <th>Name</th>
                       <th>Email</th>
                       <th>Status</th>
-                      <th>Blocked Until</th>
+                      <th style={{ width: '180px' }}>Blocked On</th>
+                      <th style={{ width: '180px' }}>Blocked Until</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -212,9 +225,12 @@ export default function BlockedStudentsPage() {
                               {student.isBlocked ? 'Permanently Blocked' : 'Temporarily Blocked'}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ fontSize: 'var(--font-size-xs)' }}>
+                            {student.blockedAt ? formatDate(student.blockedAt) : '-'}
+                          </td>
+                          <td style={{ fontSize: 'var(--font-size-xs)' }}>
                             {isTemp
-                              ? new Date(student.blockedUntil).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                              ? formatDate(student.blockedUntil)
                               : (student.isBlocked ? 'Indefinite' : '-')
                             }
                           </td>

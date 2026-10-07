@@ -77,7 +77,10 @@ async function runCleanup() {
       await User.updateMany(
         { _id: { $in: studentIds } },
         {
-          $set: { blockedUntil: blockUntil },
+          $set: { 
+            blockedUntil: blockUntil,
+            blockedAt: now
+          },
         }
       );
 
