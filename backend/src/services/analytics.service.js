@@ -130,7 +130,7 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
   const mostUsedCabin = cabinUsage.length > 0 ? cabinUsage[0] : null;
 
   return {
-    dateRange: { start: start.toISOString(), end: end.toISOString() },
+    dateRange: { start: startDate, end: endDate },
     counts,
     studentCounts,
     cabinUsage,
@@ -148,13 +148,14 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
 async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit = 20, search = '', cabinId = '') {
   await runCleanup();
 
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  const startParts = getISTParts(new Date(startDate));
+  const pad = (n) => n.toString().padStart(2, '0');
+  const startStr = `${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}`;
 
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  const endParts = getISTParts(new Date(endDate));
+  const endStr = `${endParts.year}-${pad(endParts.month)}-${pad(endParts.day)}`;
 
-  const filter = { requestedAt: { $gte: start, $lte: end } };
+  const filter = { bookingDate: { $gte: startStr, $lte: endStr } };
   
   if (cabinId) {
     filter.cabinId = new mongoose.Types.ObjectId(cabinId);
@@ -195,12 +196,14 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
  * Generate CSV string for analytics download with selectable columns.
  */
 async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses = [], search = '', cabinId = '') {
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  const startParts = getISTParts(new Date(startDate));
+  const pad = (n) => n.toString().padStart(2, '0');
+  const startStr = `${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}`;
 
-  const filter = { requestedAt: { $gte: start, $lte: end } };
+  const endParts = getISTParts(new Date(endDate));
+  const endStr = `${endParts.year}-${pad(endParts.month)}-${pad(endParts.day)}`;
+
+  const filter = { bookingDate: { $gte: startStr, $lte: endStr } };
   
   if (cabinId) {
     filter.cabinId = new mongoose.Types.ObjectId(cabinId);
