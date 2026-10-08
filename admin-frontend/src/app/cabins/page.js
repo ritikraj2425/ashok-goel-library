@@ -107,13 +107,14 @@ export default function CabinsPage() {
     setSaving(true);
     setError('');
 
-    for (const [day, config] of Object.entries(weeklySchedule)) {
-      if (!config.isClosed && config.endTime <= config.startTime) {
-        setError(`${day.charAt(0).toUpperCase() + day.slice(1)}: End time must be after start time (cross-midnight schedules are not allowed).`);
-        setSaving(false);
-        return;
-      }
-    }
+    // Removed cross-midnight validation
+    // for (const [day, config] of Object.entries(weeklySchedule)) {
+    //   if (!config.isClosed && config.endTime <= config.startTime) {
+    //     setError(`${day.charAt(0).toUpperCase() + day.slice(1)}: End time must be after start time.`);
+    //     setSaving(false);
+    //     return;
+    //   }
+    // }
 
     try {
       await updateWeeklySchedule(weeklySchedule);
@@ -133,11 +134,12 @@ export default function CabinsPage() {
     setSaving(true);
     setError('');
 
-    if (!newException.isClosed && newException.endTime <= newException.startTime) {
-      setError('Exception: End time must be after start time (cross-midnight schedules are not allowed).');
-      setSaving(false);
-      return;
-    }
+    // Removed cross-midnight validation
+    // if (!newException.isClosed && newException.endTime <= newException.startTime) {
+    //   setError('Exception: End time must be after start time.');
+    //   setSaving(false);
+    //   return;
+    // }
 
     try {
       await addException(newException);

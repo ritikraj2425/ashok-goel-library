@@ -55,12 +55,28 @@ function getISTParts(date = new Date()) {
 }
 
 /**
+ * Gets the logical date string (YYYY-MM-DD) for business logic.
+ * Shifts the day boundary to 6:00 AM so that times between midnight and 6 AM
+ * belong to the previous day.
+ */
+function getLogicalDateString(date = new Date()) {
+  const logicalDate = new Date(date.getTime() - 6 * 60 * 60 * 1000);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(logicalDate);
+  return parts;
+}
+
+/**
  * Creates an absolute Date object for a specific hour and minute in IST today.
  */
-function getAbsoluteTimeForIST(hour, minute, isNextDay = false) {
-  const istNow = getISTParts(new Date());
+function getAbsoluteTimeForIST(hour, minute, isNextDay = false, referenceDate = new Date()) {
+  const logicalDateStr = getLogicalDateString(referenceDate);
   const pad = (n) => n.toString().padStart(2, '0');
-  const isoString = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}T${pad(hour)}:${pad(minute)}:00.000+05:30`;
+  const isoString = `${logicalDateStr}T${pad(hour)}:${pad(minute)}:00.000+05:30`;
   const date = new Date(isoString);
   if (isNextDay) {
     date.setTime(date.getTime() + 24 * 60 * 60 * 1000);
@@ -141,9 +157,7 @@ const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frid
 async function getTodaySchedule() {
   const settings = await getScheduleSettings();
   const now = new Date();
-  const istNow = getISTParts(now);
-  const pad = (n) => n.toString().padStart(2, '0');
-  const todayStr = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`;
+  const todayStr = getLogicalDateString(now);
 
   // Check exceptions first
   const exception = settings.exceptions?.find(e => e.date === todayStr);
@@ -157,7 +171,8 @@ async function getTodaySchedule() {
   }
 
   // Fall back to weekly schedule
-  const dateInIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const logicalDateInIST = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const dateInIST = new Date(logicalDateInIST.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const dayOfWeek = dateInIST.getDay(); // 0 = Sunday
   const dayName = DAY_NAMES[dayOfWeek];
   const dayConfig = settings.weeklySchedule[dayName];
@@ -178,9 +193,7 @@ async function getFutureSlotsForToday() {
   const now = new Date();
   const schedule = await getTodaySchedule();
 
-  const istNow = getISTParts(now);
-  const pad = (n) => n.toString().padStart(2, '0');
-  const todayStr = `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`;
+  const todayStr = getLogicalDateString(now);
 
   if (schedule.isClosed) {
     return { date: todayStr, slots: [] };
@@ -215,14 +228,13 @@ async function getSlotDetails(slotId) {
   const endTime = getAbsoluteTimeForIST(slot.endHour, slot.endMin, slot.isNextDayEnd);
 
   const now = new Date();
-  const istNow = getISTParts(now);
-  const pad = (n) => n.toString().padStart(2, '0');
+  const dateString = getLogicalDateString(now);
 
   return {
     ...slot,
     startTime,
     endTime,
-    dateString: `${istNow.year}-${pad(istNow.month)}-${pad(istNow.day)}`,
+    dateString,
   };
 }
 
@@ -234,4 +246,5 @@ module.exports = {
   invalidateSettingsCache,
   getISTParts,
   getAbsoluteTimeForIST,
+  getLogicalDateString,
 };

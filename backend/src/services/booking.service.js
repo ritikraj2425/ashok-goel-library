@@ -5,7 +5,7 @@ const User = require('../models/User');
 const { BOOKING_STATUS, ACTIVE_STATUSES, TIMING } = require('../utils/constants');
 const { normalizeEnrollment, normalizePhone, normalizeName } = require('../utils/normalize');
 const { runCleanup } = require('./cleanup.service');
-const { getFutureSlotsForToday, getSlotDetails, getTodaySchedule, getAbsoluteTimeForIST } = require('../utils/date.utils');
+const { getFutureSlotsForToday, getSlotDetails, getTodaySchedule, getAbsoluteTimeForIST, getLogicalDateString } = require('../utils/date.utils');
 
 /**
  * Helper: Create an error with a status code.
@@ -350,7 +350,7 @@ async function getMyActiveBookings(userId) {
     .lean();
 
   const today = new Date();
-  const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const dateString = getLogicalDateString(today);
   const todaysBookings = await Booking.find({
     bookingDate: dateString,
     $or: [
@@ -991,7 +991,7 @@ async function joinGroupBooking(token, userId) {
 
   // Check remaining slot quota for the joining user
   const today = new Date();
-  const dateString = today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const dateString = getLogicalDateString(today);
   const joinerTodaysBookings = await Booking.find({
     bookingDate: dateString,
     $or: [

@@ -47,11 +47,12 @@ router.put('/schedule', async (req, res, next) => {
           err.statusCode = 400;
           throw err;
         }
-        if (config.endTime <= config.startTime) {
-          const err = new Error(`${day}: endTime must be after startTime (cross-midnight schedules are not allowed)`);
-          err.statusCode = 400;
-          throw err;
-        }
+        // Allow cross-midnight schedules.
+        // if (config.endTime <= config.startTime) {
+        //   const err = new Error(`${day}: endTime must be after startTime`);
+        //   err.statusCode = 400;
+        //   throw err;
+        // }
         if (config.slotDuration < 15 || config.slotDuration > 240) {
           const err = new Error(`${day}: slotDuration must be between 15 and 240 minutes`);
           err.statusCode = 400;
@@ -105,11 +106,12 @@ router.post('/exceptions', async (req, res, next) => {
         err.statusCode = 400;
         throw err;
       }
-      if (endTime <= startTime) {
-        const err = new Error('endTime must be after startTime (cross-midnight schedules are not allowed)');
-        err.statusCode = 400;
-        throw err;
-      }
+      // Allow cross-midnight schedules.
+      // if (endTime <= startTime) {
+      //   const err = new Error('endTime must be after startTime');
+      //   err.statusCode = 400;
+      //   throw err;
+      // }
       if (slotDuration < 15 || slotDuration > 240) {
         const err = new Error('slotDuration must be between 15 and 240 minutes');
         err.statusCode = 400;

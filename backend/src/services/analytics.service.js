@@ -38,10 +38,11 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
   await runCleanup();
 
   const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  start.setHours(6, 0, 0, 0);
 
   const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() + 1);
+  end.setHours(5, 59, 59, 999);
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
   

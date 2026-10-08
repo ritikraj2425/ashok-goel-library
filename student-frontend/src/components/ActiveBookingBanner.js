@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 export default function ActiveBookingBanner({ booking, onCancel, cancelling, onCancelApproved }) {
   const { user } = useAuth();
   const [confirmCancel, setConfirmCancel] = useState(false);
-  
+
   if (!booking) return null;
 
   const isHost = user && (String(booking.studentUserId) === String(user.id) || String(booking.studentUserId?._id) === String(user.id));
@@ -62,10 +62,10 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
   else if (isCheckedIn) title = 'Your Active Session';
 
   const formatTimeSlot = (bookingObj) => {
-    const slotStrs = bookingObj.timeSlotIds && bookingObj.timeSlotIds.length > 0 
-      ? bookingObj.timeSlotIds 
+    const slotStrs = bookingObj.timeSlotIds && bookingObj.timeSlotIds.length > 0
+      ? bookingObj.timeSlotIds
       : [bookingObj.timeSlotId];
-      
+
     const formatTime = (time24) => {
       const [h, m] = time24.split(':');
       if (!h || !m) return time24;
@@ -76,16 +76,16 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
     };
 
     if (slotStrs.length > 1) {
-       const start = slotStrs[0].split('-')[0];
-       const end = slotStrs[slotStrs.length - 1].split('-')[1];
-       return `${formatTime(start.trim())} - ${formatTime(end.trim())}`;
+      const start = slotStrs[0].split('-')[0];
+      const end = slotStrs[slotStrs.length - 1].split('-')[1];
+      return `${formatTime(start.trim())} - ${formatTime(end.trim())}`;
     } else {
-       const slotStr = slotStrs[0];
-       if (!slotStr) return '';
-       if (slotStr.includes('-')) {
-         return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
-       }
-       return formatTime(slotStr);
+      const slotStr = slotStrs[0];
+      if (!slotStr) return '';
+      if (slotStr.includes('-')) {
+        return slotStr.split('-').map(t => formatTime(t.trim())).join(' - ');
+      }
+      return formatTime(slotStr);
     }
   };
 
@@ -159,7 +159,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
       </div>
 
       {(isApproved || isAwaitingCheckin) && (
-        <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-sm)', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-sm)', fontWeight: 500, borderLeft: '3px solid var(--color-error)' }}>
+        <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-sm)', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-sm)', fontWeight: 500 }}>
           <strong style={{ color: 'var(--color-error)' }}>Important:</strong> Student must ask the librarian for check-in within 10 mins from the time the time slot starts.
         </div>
       )}
@@ -173,7 +173,7 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
             {booking.joinedMembers.map((member, i) => (
               <span key={i} style={{ fontSize: 'var(--font-size-sm)', background: 'var(--color-bg)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
-                 {member.name} ({member.email})
+                {member.name} ({member.email})
               </span>
             ))}
           </div>
