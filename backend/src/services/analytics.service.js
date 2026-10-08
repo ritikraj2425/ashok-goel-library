@@ -40,13 +40,12 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
 
   const startParts = getISTParts(new Date(startDate));
   const pad = (n) => n.toString().padStart(2, '0');
-  const start = new Date(`${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}T06:00:00.000+05:30`);
+  const startStr = `${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}`;
 
   const endParts = getISTParts(new Date(endDate));
-  const end = new Date(`${endParts.year}-${pad(endParts.month)}-${pad(endParts.day)}T05:59:59.999+05:30`);
-  end.setTime(end.getTime() + 24 * 60 * 60 * 1000); // Add 1 day
+  const endStr = `${endParts.year}-${pad(endParts.month)}-${pad(endParts.day)}`;
 
-  const filter = { requestedAt: { $gte: start, $lte: end } };
+  const filter = { bookingDate: { $gte: startStr, $lte: endStr } };
   
   if (cabinId) {
     filter.cabinId = new mongoose.Types.ObjectId(cabinId);
@@ -82,10 +81,8 @@ async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
     counts.total += 1;
     counts[b.status] = (counts[b.status] || 0) + 1;
     
-    if (!b.isExpanded || b.expandedSlotIndex === 0) {
-      studentCounts.total += b.peopleCount || 0;
-      studentCounts[b.status] = (studentCounts[b.status] || 0) + (b.peopleCount || 0);
-    }
+    studentCounts.total += b.peopleCount || 0;
+    studentCounts[b.status] = (studentCounts[b.status] || 0) + (b.peopleCount || 0);
 
     const isUsage = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED, BOOKING_STATUS.AWAITING_CHECKIN, BOOKING_STATUS.CHECKED_IN, BOOKING_STATUS.CANCELLED_BY_ADMIN, BOOKING_STATUS.EARLY_CHECKOUT].includes(b.status);
     
