@@ -128,7 +128,7 @@ export default function DashboardPage() {
 
         {(!user?.isBlocked && (!user?.blockedUntil || new Date(user.blockedUntil) <= new Date())) && (
           <div className="alert alert-warning" style={{ marginBottom: 'var(--space-md)' }}>
-            <strong>⚠️ IMPORTANT:</strong> Missing a check-in will result in a 2-day temporary block for <strong>YOU AND ALL MEMBERS OF YOUR GROUP</strong>. Please make sure to check in at the library desk within 10 minutes of your slot start time.
+            <strong>IMPORTANT:</strong> Missing a check-in will result in a 2-day temporary block for <strong>YOU AND ALL MEMBERS OF YOUR GROUP</strong>. Please make sure to check in at the library desk within 10 minutes of your slot start time.
           </div>
         )}
 
