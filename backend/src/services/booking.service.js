@@ -516,6 +516,7 @@ async function cancelApprovedByStudent(bookingId, userId) {
       $set: {
         isBlocked: true,
         blockedUntil: null, // Permanent block
+        blockedAt: new Date(),
       },
     });
 
@@ -783,6 +784,7 @@ async function cancelBookingByAdmin(bookingId, adminId, reason) {
         $set: {
           isBlocked: true,
           blockedUntil: null,
+          blockedAt: new Date(),
         },
       });
 

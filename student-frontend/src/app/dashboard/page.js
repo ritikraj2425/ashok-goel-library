@@ -128,11 +128,11 @@ export default function DashboardPage() {
 
         {user?.isBlocked ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
-            <strong>Account Blocked:</strong> Your account has been permanently blocked from booking cabins. Contact administration for more information.
+            <strong>Account Permanently Blocked:</strong> Your account was permanently blocked{user?.blockedAt ? ` on ${formatDate(user.blockedAt)}` : ''}. Contact administration for more information.
           </div>
         ) : user?.blockedUntil && new Date(user.blockedUntil) > new Date() ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
-            <strong>Account Temporarily Blocked:</strong> Due to a missed check-in, you are blocked from booking cabins until {formatDate(user.blockedUntil)}.
+            <strong>Account Temporarily Blocked:</strong> You were temporarily blocked{user?.blockedAt ? ` on ${formatDate(user.blockedAt)}` : ''} and are restricted from booking cabins until {formatDate(user.blockedUntil)}.
           </div>
         ) : null}
 
