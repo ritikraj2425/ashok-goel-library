@@ -3,8 +3,8 @@
 import StatusBadge from './StatusBadge';
 import CountdownTimer from './CountdownTimer';
 
-export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLocked }) {
-  const canBook = cabin.displayStatus === 'available' && !hasActiveBooking && !bookingsLocked;
+export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLocked, isUserBlocked }) {
+  const canBook = cabin.displayStatus === 'available' && !hasActiveBooking && !bookingsLocked && !isUserBlocked;
 
   return (
     <div className="card cabin-card">
@@ -61,6 +61,10 @@ export default function CabinCard({ cabin, hasActiveBooking, onBook, bookingsLoc
           <button className="btn btn-primary" onClick={() => onBook(cabin)}>
             Book Cabin
           </button>
+        ) : isUserBlocked && cabin.displayStatus === 'available' ? (
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }}>
+            Booking restricted
+          </span>
         ) : cabin.displayStatus === 'available' && hasActiveBooking ? (
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
             Daily quota reached

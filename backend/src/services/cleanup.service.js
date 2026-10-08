@@ -55,11 +55,20 @@ async function runCleanup() {
     const noShowBookings = await Booking.find({
       status: BOOKING_STATUS.AWAITING_CHECKIN,
       checkInDeadlineAt: { $lt: now },
-    }).select('_id studentUserId');
+    }).select('_id studentUserId joinedMembers');
 
     if (noShowBookings.length > 0) {
       const bookingIds = noShowBookings.map(b => b._id);
-      const studentIds = [...new Set(noShowBookings.map(b => b.studentUserId.toString()))];
+      let studentIds = [];
+      for (const b of noShowBookings) {
+        if (b.studentUserId) studentIds.push(b.studentUserId.toString());
+        if (b.joinedMembers && b.joinedMembers.length > 0) {
+          for (const m of b.joinedMembers) {
+            if (m.studentUserId) studentIds.push(m.studentUserId.toString());
+          }
+        }
+      }
+      studentIds = [...new Set(studentIds)];
 
       // Mark bookings as NO_SHOW
       await Booking.updateMany(
@@ -75,7 +84,7 @@ async function runCleanup() {
       // Block students for 2 days
       const blockUntil = new Date(now.getTime() + TIMING.BLOCK_DURATION_MS);
       await User.updateMany(
-        { _id: { $in: studentIds } },
+        { _id: { $in: studentIds }, isBlocked: { $ne: true } },
         {
           $set: { 
             blockedUntil: blockUntil,

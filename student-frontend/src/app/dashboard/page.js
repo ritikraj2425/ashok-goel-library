@@ -126,6 +126,12 @@ export default function DashboardPage() {
         <h2 className="page-title">Study Cabins</h2>
         <p className="page-subtitle">View availability and book a cabin for your study group.</p>
 
+        {(!user?.isBlocked && (!user?.blockedUntil || new Date(user.blockedUntil) <= new Date())) && (
+          <div className="alert alert-warning" style={{ marginBottom: 'var(--space-md)' }}>
+            <strong>⚠️ IMPORTANT:</strong> Missing a check-in will result in a 2-day temporary block for <strong>YOU AND ALL MEMBERS OF YOUR GROUP</strong>. Please make sure to check in at the library desk within 10 minutes of your slot start time.
+          </div>
+        )}
+
         {user?.isBlocked ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
             <strong>Account Permanently Blocked:</strong> Your account was permanently blocked{user?.blockedAt ? ` on ${formatDate(user.blockedAt)}` : ''}. Contact administration for more information.
@@ -175,6 +181,7 @@ export default function DashboardPage() {
               hasActiveBooking={slotsUsedToday >= 2}
               onBook={setSelectedCabin}
               bookingsLocked={bookingsLocked}
+              isUserBlocked={user?.isBlocked || (user?.blockedUntil && new Date(user.blockedUntil) > new Date())}
             />
           ))}
         </div>
@@ -194,7 +201,7 @@ export default function DashboardPage() {
             <li><strong>Group Bookings:</strong> If a cabin requires multiple people, you must share the invite link or QR code with your group. All members must join within 10 minutes, or the request will expire.</li>
             <li><strong>Auto-Approval:</strong> Bookings are automatically approved immediately (or as soon as all group members join).</li>
             <li>Students must physically check-in at the library desk within 10 minutes of the slot start time.</li>
-            <li><strong>Penalties:</strong> Missing a check-in results in an automatic 2-day temporary block.</li>
+            <li><strong>Penalties:</strong> Missing a check-in results in an automatic 2-day temporary block for all members of the group.</li>
             <li>Cancelling an approved booking 3 times in a week results in a permanent block. (Cancelling a pending group invite does <em>not</em> count as a strike).</li>
             <li>If you are leaving the cabin before your booked time slot ends, please inform the library team for an early checkout.</li>
           </ul>
