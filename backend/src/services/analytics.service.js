@@ -1,6 +1,7 @@
 const Booking = require('../models/Booking');
 const { BOOKING_STATUS } = require('../utils/constants');
 const { runCleanup } = require('./cleanup.service');
+const { getISTParts } = require('../utils/date.utils');
 const mongoose = require('mongoose');
 
 function expandBookings(bookings) {
@@ -37,12 +38,13 @@ function expandBookings(bookings) {
 async function getAnalytics(startDate, endDate, search = '', cabinId = '') {
   await runCleanup();
 
-  const start = new Date(startDate);
-  start.setHours(6, 0, 0, 0);
+  const startParts = getISTParts(new Date(startDate));
+  const pad = (n) => n.toString().padStart(2, '0');
+  const start = new Date(`${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}T06:00:00.000+05:30`);
 
-  const end = new Date(endDate);
-  end.setDate(end.getDate() + 1);
-  end.setHours(5, 59, 59, 999);
+  const endParts = getISTParts(new Date(endDate));
+  const end = new Date(`${endParts.year}-${pad(endParts.month)}-${pad(endParts.day)}T05:59:59.999+05:30`);
+  end.setTime(end.getTime() + 24 * 60 * 60 * 1000); // Add 1 day
 
   const filter = { requestedAt: { $gte: start, $lte: end } };
   
