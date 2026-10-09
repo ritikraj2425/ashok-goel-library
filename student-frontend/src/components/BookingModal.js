@@ -15,7 +15,7 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
   const [formData, setFormData] = useState({
     mainStudentName: user?.name || '',
     mainStudentPhone: user?.phoneNumber || '',
-    peopleCount: cabin.minPeople,
+    peopleCount: cabin.maxPeople,
     timeSlotId: cabin.availableSlots && cabin.availableSlots.length > 0 ? cabin.availableSlots[0].id : '',
   });
   const [loading, setLoading] = useState(false);
