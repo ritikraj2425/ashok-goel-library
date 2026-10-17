@@ -15,7 +15,7 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
   const [formData, setFormData] = useState({
     mainStudentName: user?.name || '',
     mainStudentPhone: user?.phoneNumber || '',
-    peopleCount: cabin.maxPeople,
+    peopleCount: '',
     timeSlotId: cabin.availableSlots && cabin.availableSlots.length > 0 ? cabin.availableSlots[0].id : '',
   });
   const [loading, setLoading] = useState(false);
@@ -118,8 +118,11 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
   }, [pendingBooking, pollJoinStatus]);
 
   const handlePeopleCountChange = (e) => {
-    const count = parseInt(e.target.value, 10);
-    setFormData((prev) => ({ ...prev, peopleCount: count }));
+    const val = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      peopleCount: val === '' ? '' : parseInt(val, 10),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -136,6 +139,9 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
       if (!nameRegex.test(mainName)) throw new Error('Name should only contain letters.');
       if (!phoneRegex.test(mainPhone)) throw new Error('Phone must be exactly 10 digits.');
       if (!formData.timeSlotId) throw new Error('Please select a valid time slot.');
+      if (userType === 'student' && (!formData.peopleCount || isNaN(Number(formData.peopleCount)))) {
+        throw new Error('Please select the number of people.');
+      }
 
       const requestBody = {
         cabinId: cabin.id,
@@ -145,7 +151,7 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
           phoneNumber: formData.mainStudentPhone.trim(),
         },
         groupMembers: [],
-        peopleCount: userType === 'student' ? formData.peopleCount : 1,
+        peopleCount: userType === 'student' ? Number(formData.peopleCount) : 1,
         slotCount,
       };
 
@@ -455,14 +461,16 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
                   className="form-select"
                   value={formData.peopleCount}
                   onChange={handlePeopleCountChange}
+                  required
                 >
+                  <option value="" disabled>Select number of people</option>
                   {countOptions.map((n) => (
                     <option key={n} value={n}>
                       {n} {n === 1 ? 'person' : 'people'}
                     </option>
                   ))}
                 </select>
-                {formData.peopleCount > 1 && (
+                {formData.peopleCount && formData.peopleCount > 1 && (
                   <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)' }}>
                     After booking, a QR code and link will be generated. Your {formData.peopleCount - 1} group member(s) must scan/click to join within 10 minutes.
                   </p>
