@@ -128,11 +128,11 @@ export default function DashboardPage() {
         <h2 className="page-title">Study Cabins</h2>
         <p className="page-subtitle">View availability and book a cabin for your study group.</p>
 
-        {(!user?.isBlocked && (!user?.blockedUntil || new Date(user.blockedUntil) <= new Date())) && (
+        {/* {(!user?.isBlocked && (!user?.blockedUntil || new Date(user.blockedUntil) <= new Date())) && (
           <div className="alert alert-warning" style={{ marginBottom: 'var(--space-md)' }}>
             <strong>IMPORTANT:</strong> Missing a check-in will result in a 2-day temporary block for <strong>YOU AND ALL MEMBERS OF YOUR GROUP</strong>. Please make sure to check in at the library desk within 10 minutes of your slot start time.
           </div>
-        )}
+        )} */}
 
         {user?.isBlocked ? (
           <div className="alert alert-error" style={{ marginBottom: 'var(--space-md)' }}>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
               {bookingUnlockTime
                 ? `Bookings for today will open at ${new Date(bookingUnlockTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}.`
                 : closedLabel
-                  ? `The library is closed today — ${closedLabel}.`
+                  ? `The library is closed today - ${closedLabel}.`
                   : 'The library is closed today.'}
             </span>
           </div>

@@ -197,6 +197,8 @@ async function getAnalyticsBookings(startDate, endDate, status, page = 1, limit 
  * Generate CSV string for analytics download with selectable columns.
  */
 async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses = [], search = '', cabinId = '') {
+  await runCleanup();
+
   const startParts = getISTParts(new Date(startDate));
   const pad = (n) => n.toString().padStart(2, '0');
   const startStr = `${startParts.year}-${pad(startParts.month)}-${pad(startParts.day)}`;
