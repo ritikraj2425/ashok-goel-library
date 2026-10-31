@@ -95,6 +95,7 @@ async function getCabinStatusForStudents() {
     bookingsLocked,
     bookingUnlockTime,
     isClosed: schedule.isClosed,
+    closedLabel: schedule.label || '',
   };
 }
 

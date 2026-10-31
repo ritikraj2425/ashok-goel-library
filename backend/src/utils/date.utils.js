@@ -167,6 +167,7 @@ async function getTodaySchedule() {
       endTime: exception.endTime,
       slotDuration: exception.slotDuration,
       isClosed: !!exception.isClosed,
+      label: exception.label || '',
     };
   }
 

@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [bookingsLocked, setBookingsLocked] = useState(false);
   const [bookingUnlockTime, setBookingUnlockTime] = useState(null);
+  const [closedLabel, setClosedLabel] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -48,6 +49,7 @@ export default function DashboardPage() {
       setCabins(cabinData.cabins || []);
       setBookingsLocked(cabinData.bookingsLocked || false);
       setBookingUnlockTime(cabinData.bookingUnlockTime || null);
+      setClosedLabel(cabinData.closedLabel || '');
       setActiveBookings(bookingData.bookings || []);
       setSlotsUsedToday(bookingData.slotsUsedToday || 0);
       setError('');
@@ -151,7 +153,9 @@ export default function DashboardPage() {
               <strong>Bookings are currently locked.</strong>{' '}
               {bookingUnlockTime
                 ? `Bookings for today will open at ${new Date(bookingUnlockTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}.`
-                : 'The library is closed today.'}
+                : closedLabel
+                  ? `The library is closed today — ${closedLabel}.`
+                  : 'The library is closed today.'}
             </span>
           </div>
         )}

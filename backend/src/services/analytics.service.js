@@ -19,7 +19,8 @@ function expandBookings(bookings) {
           b1.status = BOOKING_STATUS.EARLY_CHECKOUT;
           b2.status = BOOKING_STATUS.CANCELLED_BY_STUDENT;
         } else {
-          b1.status = BOOKING_STATUS.EARLY_CHECKOUT;
+          // Checkout during/after slot 2 start: slot 1 was fully used
+          b1.status = BOOKING_STATUS.COMPLETED;
           b2.status = BOOKING_STATUS.EARLY_CHECKOUT;
         }
       }
@@ -318,7 +319,7 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     selectedColumns.map((c) => escapeCSV(COLUMN_MAP[c].extract(b))).join(',')
   );
 
-  // Compute summary statistics (avoid double-counting people for expanded slots)
+  // Compute summary statistics
   const summaryCounts = {};
   const summaryStudents = {};
   let totalBookings = 0;
@@ -328,15 +329,9 @@ async function generateAnalyticsCSV(startDate, endDate, columns = [], statuses =
     const s = b.status || 'unknown';
     summaryCounts[s] = (summaryCounts[s] || 0) + 1;
     totalBookings++;
-    // Only count students once per original booking (not per expanded slot)
-    if (!b.isExpanded || b.expandedSlotIndex === 0) {
-      const pc = b.peopleCount || 0;
-      summaryStudents[s] = (summaryStudents[s] || 0) + pc;
-      totalStudents += pc;
-    } else {
-      // Ensure key exists even if we don't add to the count
-      summaryStudents[s] = summaryStudents[s] || 0;
-    }
+    const pc = b.peopleCount || 0;
+    summaryStudents[s] = (summaryStudents[s] || 0) + pc;
+    totalStudents += pc;
   }
 
   const formatStatus = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
