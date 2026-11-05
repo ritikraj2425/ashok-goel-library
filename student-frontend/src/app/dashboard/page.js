@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { getCabinStatus, getMyActiveBookings, cancelPendingBooking, cancelApprovedBooking } from '@/lib/api';
@@ -39,8 +39,11 @@ export default function DashboardPage() {
   const [bookingsLocked, setBookingsLocked] = useState(false);
   const [bookingUnlockTime, setBookingUnlockTime] = useState(null);
   const [closedLabel, setClosedLabel] = useState('');
+  const isFetchingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const [cabinData, bookingData] = await Promise.all([
         getCabinStatus(),
@@ -57,6 +60,7 @@ export default function DashboardPage() {
       setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 

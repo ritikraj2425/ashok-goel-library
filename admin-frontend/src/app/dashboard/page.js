@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/lib/auth';
 import { getDashboard, approveBooking, rejectBooking, cancelBooking, getBookingDetail, checkInBooking } from '@/lib/api';
@@ -81,8 +81,11 @@ export default function AdminDashboardPage() {
   const [success, setSuccess] = useState('');
   const [confirm, setConfirm] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null);
+  const isFetchingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const result = await getDashboard();
       setData(result);
@@ -91,6 +94,7 @@ export default function AdminDashboardPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
