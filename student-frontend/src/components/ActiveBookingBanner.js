@@ -51,8 +51,25 @@ export default function ActiveBookingBanner({ booking, onCancel, cancelling, onC
   useEffect(() => {
     if (!isPendingMembers) return;
     pollStatus();
-    pollRef.current = setInterval(pollStatus, 10000);
-    return () => clearInterval(pollRef.current);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        pollStatus();
+      }
+    };
+
+    pollRef.current = setInterval(() => {
+      if (!document.hidden) {
+        pollStatus();
+      }
+    }, 10000);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isPendingMembers, pollStatus]);
 
   let title = 'Your Active Booking';

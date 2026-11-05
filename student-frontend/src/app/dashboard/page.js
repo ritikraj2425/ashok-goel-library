@@ -70,11 +70,28 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router, fetchData]);
 
-  // Polling
+  // Polling: only poll when tab is active/visible
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(fetchData, POLL_INTERVAL);
-    return () => clearInterval(interval);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    };
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    }, POLL_INTERVAL);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user, fetchData]);
 
   const handleBookSuccess = () => {

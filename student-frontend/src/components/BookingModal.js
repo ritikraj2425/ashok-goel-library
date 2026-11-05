@@ -113,8 +113,25 @@ export default function BookingModal({ cabin, onClose, onSuccess, remainingSlots
   useEffect(() => {
     if (!pendingBooking) return;
     pollJoinStatus(); // initial fetch
-    pollRef.current = setInterval(pollJoinStatus, JOIN_POLL_INTERVAL);
-    return () => clearInterval(pollRef.current);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        pollJoinStatus();
+      }
+    };
+
+    pollRef.current = setInterval(() => {
+      if (!document.hidden) {
+        pollJoinStatus();
+      }
+    }, JOIN_POLL_INTERVAL);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [pendingBooking, pollJoinStatus]);
 
   const handlePeopleCountChange = (e) => {

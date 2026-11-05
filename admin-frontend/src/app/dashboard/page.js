@@ -8,7 +8,7 @@ import Sidebar from '@/components/Sidebar';
 import CountdownTimer from '@/components/CountdownTimer';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
-const POLL_INTERVAL = 10000;
+const POLL_INTERVAL = 30000; // 30 seconds
 
 const formatTimeSlot = (slotStr) => {
   if (!slotStr) return '';
@@ -99,10 +99,28 @@ export default function AdminDashboardPage() {
     if (admin) fetchData();
   }, [admin, authLoading, router, fetchData]);
 
+  // Polling: only poll when tab is active/visible
   useEffect(() => {
     if (!admin) return;
-    const interval = setInterval(fetchData, POLL_INTERVAL);
-    return () => clearInterval(interval);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    };
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchData();
+      }
+    }, POLL_INTERVAL);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [admin, fetchData]);
 
   const showSuccess = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(''), 4000); };
